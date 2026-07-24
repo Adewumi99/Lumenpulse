@@ -59,6 +59,7 @@ import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor'
 import { SorobanEventsModule } from './soroban-events/soroban-events.module';
 import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
+import { VerificationRequestsModule } from './verification-requests/verification-requests.module';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
     ExchangeRatesModule,
     GrantsModule,
     VerificationModule,
+    VerificationRequestsModule,
     WatchlistModule,
     OutboxModule,
     ExportModule,
