@@ -6,7 +6,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
+  Request,
+  Logger,
+  UsePipes,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,7 +20,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
+import { ContractAdminGuard } from '../common/guards/contract-admin.guard';
+import { ContractAdminAuditService } from '../contract-admin/contract-admin-audit.service';
 import { Roles } from '../auth/decorators/auth.decorators';
 import { UserRole } from '../users/entities/user.entity';
 import { AllocateBudgetDto } from './dto/allocate-budget.dto';
@@ -25,17 +30,43 @@ import {
   StreamStateDto,
 } from './dto/stream-response.dto';
 import { RotateBeneficiaryDto } from './dto/rotate-beneficiary.dto';
+import {
+  StreamPreviewDto,
+  StreamPreviewResponseDto,
+} from './dto/stream-preview.dto';
 import { TreasuryService } from './treasury.service';
+import { AuditBlockchainAction } from '../admin-audit/decorators/audit-blockchain-action.decorator';
+import { Request as ExpressRequest } from 'express';
+import { CustomValidationPipe } from '../common/pipes/validation.pipe';
+
+// Define a minimal user interface for type safety
+interface RequestUser {
+  id: string;
+  role: UserRole;
+  email?: string;
+}
+
+// Extend Express Request to include our user
+interface AuthenticatedRequest extends ExpressRequest {
+  user?: RequestUser;
+}
 
 @ApiTags('treasury')
 @Controller('treasury')
+@UsePipes(CustomValidationPipe)
 export class TreasuryController {
-  constructor(private readonly treasuryService: TreasuryService) {}
+  private readonly logger = new Logger(TreasuryController.name);
+
+  constructor(
+    private readonly treasuryService: TreasuryService,
+    private readonly auditService: ContractAdminAuditService,
+  ) {}
 
   @Post('streams')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard)
   @Roles(UserRole.ADMIN)
+  @AuditBlockchainAction({ contractField: 'beneficiary' })
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Allocate a treasury budget and start a stream (admin only)',
@@ -58,7 +89,31 @@ export class TreasuryController {
   })
   async allocateBudget(
     @Body() dto: AllocateBudgetDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<AllocateBudgetResponseDto> {
+    const user = req.user!;
+    this.logger.log(
+      `Admin ${user.id} allocating budget: ${dto.amount} to ${dto.beneficiary}`,
+    );
+
+    // Log the blockchain operation
+    await this.auditService.logBlockchainOperation(
+      {
+        actorId: user.id,
+        actorEmail: user.email,
+        endpoint: 'POST /treasury/streams',
+        targetContract: 'treasury',
+        paramsSummary: {
+          beneficiary: dto.beneficiary,
+          amount: dto.amount,
+          startTime: dto.startTime,
+          duration: dto.duration,
+        },
+        responseStatus: HttpStatus.CREATED,
+      },
+      req as ExpressRequest,
+    );
+
     return this.treasuryService.allocateBudget(dto);
   }
 
@@ -94,8 +149,9 @@ export class TreasuryController {
 
   @Post('streams/rotate')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, ContractAdminGuard)
   @Roles(UserRole.ADMIN)
+  @AuditBlockchainAction({ contractField: 'oldBeneficiary' })
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Rotate beneficiary for a treasury stream (admin only)',
@@ -112,7 +168,10 @@ export class TreasuryController {
   @ApiResponse({ status: 400, description: 'Invalid request parameters' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Caller is not an admin' })
-  @ApiResponse({ status: 404, description: 'Stream not found for old beneficiary' })
+  @ApiResponse({
+    status: 404,
+    description: 'Stream not found for old beneficiary',
+  })
   @ApiResponse({ status: 502, description: 'Treasury transaction failed' })
   @ApiResponse({
     status: 503,
@@ -120,7 +179,59 @@ export class TreasuryController {
   })
   async rotateBeneficiary(
     @Body() dto: RotateBeneficiaryDto,
+    @Request() req: AuthenticatedRequest,
   ): Promise<AllocateBudgetResponseDto> {
+    const user = req.user!;
+    this.logger.log(
+      `Admin ${user.id} rotating beneficiary: ${dto.oldBeneficiary}`,
+    );
+
+    // Log the blockchain operation
+    await this.auditService.logBlockchainOperation(
+      {
+        actorId: user.id,
+        actorEmail: user.email,
+        endpoint: 'POST /treasury/streams/rotate',
+        targetContract: 'treasury',
+        paramsSummary: {
+          oldBeneficiary: dto.oldBeneficiary,
+          hasNewBeneficiary: !!dto.newBeneficiary,
+        },
+        responseStatus: HttpStatus.OK,
+      },
+      req as ExpressRequest,
+    );
+
     return this.treasuryService.rotateBeneficiary(dto);
+  }
+
+  @Get('streams/preview')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Preview unlocked treasury stream amounts for a beneficiary',
+    description:
+      'Read-only endpoint that computes unlocked, claimed, and remaining ' +
+      'stream amounts using the same linear-vesting formula as the on-chain ' +
+      'contract. No transaction is submitted. Useful for dashboards and ' +
+      'debugging tools.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stream preview calculated successfully',
+    type: StreamPreviewResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid beneficiary address or atTime',
+  })
+  @ApiResponse({ status: 404, description: 'No stream found for beneficiary' })
+  @ApiResponse({
+    status: 503,
+    description: 'Treasury not configured / RPC down',
+  })
+  async previewStream(
+    @Query() dto: StreamPreviewDto,
+  ): Promise<StreamPreviewResponseDto> {
+    return this.treasuryService.previewStream(dto);
   }
 }

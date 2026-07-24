@@ -26,6 +26,9 @@ from src.analytics.project_verification_trend import (
 from src.db.postgres_service import PostgresService
 from src.ingestion.rpc_benchmark import RPCProviderBenchmark
 from src.round_analyzer import _round_analyzer_job
+from src.metadata_drift_detector import MetadataDriftDetector
+from src.kpi_reconciliation import KPIReconciler
+
 
 
 logger = setup_logger(__name__)
@@ -270,6 +273,46 @@ def _contributor_reputation_snapshot_job() -> None:
             exc_info=True,
         )
 
+
+def _metadata_drift_detector_job() -> None:
+    """Scheduled wrapper for MetadataDriftDetector (#882).
+
+    Recomputes chain-derived project/milestone state from the ContractEvent
+    log and diffs it against ProjectView/ProjectMilestone. Read-only with
+    respect to source data — findings are persisted separately for review.
+    Errors are caught so the scheduler keeps running.
+    """
+    try:
+        detector = MetadataDriftDetector()
+        report = detector.run_and_persist(
+            limit=int(os.getenv("METADATA_DRIFT_PROJECT_LIMIT", "500"))
+        )
+        logger.info(
+            "Metadata drift detection: projects_checked=%d projects_with_drift=%d findings=%d",
+            report.projects_checked,
+            report.projects_with_drift,
+            len(report.findings),
+        )
+    except Exception as exc:
+        logger.error(f"Metadata drift detector job failed: {exc}", exc_info=True)
+
+
+def _kpi_reconciliation_job() -> None:
+    """Scheduled wrapper for KPIReconciler (#1054).
+
+    Compares off-chain ProjectView KPIs against on-chain contract state via
+    direct Soroban RPC queries. Safe for rate limits.
+    """
+    try:
+        reconciler = KPIReconciler()
+        reconciler.run_reconciliation(
+            limit=int(os.getenv("KPI_RECONCILIATION_PROJECT_LIMIT", "10")),
+            rate_limit_sleep=float(os.getenv("KPI_RECONCILIATION_RATE_LIMIT_SLEEP", "0.2")),
+        )
+    except Exception as exc:
+        logger.error(f"KPI reconciliation job failed: {exc}", exc_info=True)
+
+
 class AnalyticsScheduler:
 
     """Manages the APScheduler scheduler for analytics jobs"""
@@ -357,6 +400,25 @@ class AnalyticsScheduler:
                 name="Contributor Reputation Snapshot Builder",
                 replace_existing=True,
             )
+
+            # ── Metadata Drift Detection: every 6 hours (#882) ───────────
+            self.scheduler.add_job(
+                func=_metadata_drift_detector_job,
+                trigger=IntervalTrigger(hours=6),
+                id="metadata_drift_detection",
+                name="Metadata Drift Detector (backend vs on-chain)",
+                replace_existing=True,
+            )
+
+            # ── KPI Reconciliation: every 6 hours (#1054) ───────────────
+            self.scheduler.add_job(
+                func=_kpi_reconciliation_job,
+                trigger=IntervalTrigger(hours=6),
+                id="kpi_reconciliation",
+                name="KPI Reconciler against Live Contract Reads",
+                replace_existing=True,
+            )
+
 
             self.scheduler.start()
             logger.info("✓ Analytics scheduler started")
