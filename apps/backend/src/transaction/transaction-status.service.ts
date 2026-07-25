@@ -184,8 +184,8 @@ export class TransactionStatusService {
       this.logger.log(
         `Successfully notified callback for ${callback.transactionHash}`,
       );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    } catch (error: unknown) {
+      const errorMsg = this.getErrorMessage(error);
       this.logger.error(
         `Failed to notify callback for ${callback.transactionHash}: ${errorMsg}`,
       );
@@ -208,5 +208,15 @@ export class TransactionStatusService {
       ];
       await this.callbackRepository.save(callback);
     }
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    return 'Unknown error';
   }
 }
