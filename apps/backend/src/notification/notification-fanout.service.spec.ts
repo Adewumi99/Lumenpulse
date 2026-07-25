@@ -8,7 +8,7 @@ import {
   NotificationSuppressionLog,
   SuppressionReason,
 } from './notification-suppression-log.entity';
-import { WatchlistItem, WatchlistItemType } from '../watchlist/watchlist-item.entity';
+import { WatchlistItem } from '../watchlist/watchlist-item.entity';
 import { NotificationType, NotificationSeverity } from './notification.entity';
 import { EventCategory } from '../common/event-catalog';
 import { NotificationChannel } from './notification-preference.entity';
