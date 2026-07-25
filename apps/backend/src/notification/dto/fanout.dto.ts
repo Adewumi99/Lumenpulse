@@ -96,6 +96,7 @@ export class FanoutResultDto {
   @ApiProperty({
     description: 'Breakdown of suppression reasons',
     type: 'object',
+    additionalProperties: true,
   })
   suppressionBreakdown: Record<string, number>;
 
@@ -122,7 +123,7 @@ export class SuppressionLogResponseDto {
   @ApiProperty()
   reason: string;
 
-  @ApiProperty({ type: 'object', nullable: true })
+  @ApiProperty({ type: 'object', nullable: true, additionalProperties: true })
   metadata: Record<string, unknown> | null;
 
   @ApiProperty()
