@@ -43,7 +43,10 @@ export class WebhookService {
       return '';
     }
 
-    return this.createSignatureHeader(JSON.stringify(payload), activeSecret.secret);
+    return this.createSignatureHeader(
+      JSON.stringify(payload),
+      activeSecret.secret,
+    );
   }
 
   /**
@@ -96,12 +99,14 @@ export class WebhookService {
       });
     }
 
-    const configuredSecrets = this.configService.get<string>('WEBHOOK_SECRETS', '');
+    const configuredSecrets = this.configService.get<string>(
+      'WEBHOOK_SECRETS',
+      '',
+    );
     if (configuredSecrets) {
       try {
         const parsed = JSON.parse(configuredSecrets) as
-          | WebhookSecretEntry[]
-          | WebhookSecretEntry;
+          WebhookSecretEntry[] | WebhookSecretEntry;
         const entries = Array.isArray(parsed) ? parsed : [parsed];
         for (const entry of entries) {
           if (entry?.secret) {

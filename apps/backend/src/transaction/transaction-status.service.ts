@@ -142,17 +142,23 @@ export class TransactionStatusService {
       error: callback.lastError,
     };
 
-    const signatureHeaders = this.webhookService.buildSignatureHeaders(payload, {
-      secretId: callback.secretId ?? undefined,
-      previousSecretId: callback.previousSecretId ?? undefined,
-    });
-    const headers = {
+    const signatureHeaders = this.webhookService.buildSignatureHeaders(
+      payload,
+      {
+        secretId: callback.secretId ?? undefined,
+        previousSecretId: callback.previousSecretId ?? undefined,
+      },
+    );
+    const headers: Record<string, string | undefined> = {
       ...signatureHeaders,
-      ...(callback.secretId ? { 'X-Webhook-Secret-Id': callback.secretId } : {}),
+      ...(callback.secretId
+        ? { 'X-Webhook-Secret-Id': callback.secretId }
+        : {}),
       ...(callback.previousSecretId
         ? { 'X-Webhook-Previous-Secret-Id': callback.previousSecretId }
         : {}),
     };
+    const signatureHeader = headers['X-Webhook-Signature'];
 
     try {
       const response = await firstValueFrom(
@@ -165,21 +171,22 @@ export class TransactionStatusService {
       callback.status = TransactionCallbackStatus.NOTIFIED;
       callback.retryCount = 0;
       callback.lastDeliveryStatus = 'delivered';
-      callback.lastSignature = headers['X-Webhook-Signature'] ?? null;
+      callback.lastSignature = signatureHeader ?? null;
       callback.lastResponseStatusCode = response?.status ?? 200;
       callback.lastDeliveredAt = new Date();
       callback.lastDeliveryError = null;
-      callback.deliveryHistory = [
+      const deliveryHistory: Array<Record<string, unknown>> = [
         ...(callback.deliveryHistory ?? []),
         {
           at: new Date().toISOString(),
           status: 'delivered',
-          signature: headers['X-Webhook-Signature'] ?? null,
+          signature: signatureHeader ?? null,
           secretId: headers['X-Webhook-Secret-Id'] ?? null,
           previousSecretId: headers['X-Webhook-Previous-Secret-Id'] ?? null,
           responseStatusCode: response?.status ?? 200,
         },
       ];
+      callback.deliveryHistory = deliveryHistory;
       await this.callbackRepository.save(callback);
       this.logger.log(
         `Successfully notified callback for ${callback.transactionHash}`,
@@ -193,19 +200,20 @@ export class TransactionStatusService {
       callback.status = TransactionCallbackStatus.FAILED_TO_NOTIFY;
       callback.lastError = `Notification failed: ${errorMsg}`;
       callback.lastDeliveryStatus = 'failed';
-      callback.lastSignature = headers['X-Webhook-Signature'] ?? null;
+      callback.lastSignature = signatureHeader ?? null;
       callback.lastDeliveryError = errorMsg;
-      callback.deliveryHistory = [
+      const deliveryHistory: Array<Record<string, unknown>> = [
         ...(callback.deliveryHistory ?? []),
         {
           at: new Date().toISOString(),
           status: 'failed',
-          signature: headers['X-Webhook-Signature'] ?? null,
+          signature: signatureHeader ?? null,
           secretId: headers['X-Webhook-Secret-Id'] ?? null,
           previousSecretId: headers['X-Webhook-Previous-Secret-Id'] ?? null,
           error: errorMsg,
         },
       ];
+      callback.deliveryHistory = deliveryHistory;
       await this.callbackRepository.save(callback);
     }
   }

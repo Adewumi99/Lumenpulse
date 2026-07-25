@@ -1,9 +1,4 @@
-import {
-  IsString,
-  IsUrl,
-  IsNotEmpty,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsUrl, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class RegisterTransactionCallbackDto {
   @IsString()

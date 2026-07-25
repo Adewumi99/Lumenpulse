@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddWebhookRotationFieldsToTransactionCallbacks1802000000000
-  implements MigrationInterface
-{
+export class AddWebhookRotationFieldsToTransactionCallbacks1802000000000 implements MigrationInterface {
   name = 'AddWebhookRotationFieldsToTransactionCallbacks1802000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -83,7 +81,10 @@ export class AddWebhookRotationFieldsToTransactionCallbacks1802000000000
     await queryRunner.dropColumn('transaction_callbacks', 'deliveryHistory');
     await queryRunner.dropColumn('transaction_callbacks', 'lastDeliveryError');
     await queryRunner.dropColumn('transaction_callbacks', 'lastDeliveredAt');
-    await queryRunner.dropColumn('transaction_callbacks', 'lastResponseStatusCode');
+    await queryRunner.dropColumn(
+      'transaction_callbacks',
+      'lastResponseStatusCode',
+    );
     await queryRunner.dropColumn('transaction_callbacks', 'lastSignature');
     await queryRunner.dropColumn('transaction_callbacks', 'lastDeliveryStatus');
     await queryRunner.dropColumn('transaction_callbacks', 'previousSecretId');
