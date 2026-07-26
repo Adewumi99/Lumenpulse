@@ -64,6 +64,7 @@ import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
+import { ContractHealthSnapshotModule } from './health/contract-health-snapshot.module';
 
 @Module({
   imports: [
@@ -137,6 +138,7 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
     ContractsModule,
     ContractAdminModule,
     PriceAlertModule,
+    ContractHealthSnapshotModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
