@@ -14,7 +14,10 @@ describe('GrantsService.getLeaderboard', () => {
       providers: [
         GrantsService,
         { provide: ConfigService, useValue: { get: jest.fn() } },
-        { provide: getQueueToken(CONTRIBUTION_QUEUE), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: getQueueToken(CONTRIBUTION_QUEUE),
+          useValue: { add: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

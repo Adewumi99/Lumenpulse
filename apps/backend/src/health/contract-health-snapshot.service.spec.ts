@@ -96,7 +96,10 @@ const mockContractHealthService = () => ({
 });
 
 const mockSnapshotRepo = () => ({
-  save: jest.fn<Promise<ContractHealthSnapshot>, [Partial<ContractHealthSnapshot>]>(),
+  save: jest.fn<
+    Promise<ContractHealthSnapshot>,
+    [Partial<ContractHealthSnapshot>]
+  >(),
   findLatest: jest.fn<Promise<ContractHealthSnapshot | null>, [string?]>(),
   findHistory: jest.fn<Promise<ContractHealthSnapshot[]>, [object?]>(),
   findById: jest.fn<Promise<ContractHealthSnapshot | null>, [string]>(),
@@ -143,8 +146,13 @@ describe('ContractHealthSnapshotService', () => {
 
   describe('captureSnapshot', () => {
     it('calls ContractHealthService, persists the result, and returns the saved entity', async () => {
-      healthService.getContractHealthReport.mockResolvedValue(MOCK_HEALTH_REPORT);
-      const saved: ContractHealthSnapshot = { ...SNAPSHOT_BASE, triggeredBy: 'scheduler' };
+      healthService.getContractHealthReport.mockResolvedValue(
+        MOCK_HEALTH_REPORT,
+      );
+      const saved: ContractHealthSnapshot = {
+        ...SNAPSHOT_BASE,
+        triggeredBy: 'scheduler',
+      };
       repo.save.mockResolvedValue(saved);
 
       const result = await service.captureSnapshot('scheduler');
@@ -163,8 +171,13 @@ describe('ContractHealthSnapshotService', () => {
     });
 
     it('passes triggeredBy=manual when called explicitly', async () => {
-      healthService.getContractHealthReport.mockResolvedValue(MOCK_HEALTH_REPORT);
-      const saved: ContractHealthSnapshot = { ...SNAPSHOT_BASE, triggeredBy: 'manual' };
+      healthService.getContractHealthReport.mockResolvedValue(
+        MOCK_HEALTH_REPORT,
+      );
+      const saved: ContractHealthSnapshot = {
+        ...SNAPSHOT_BASE,
+        triggeredBy: 'manual',
+      };
       repo.save.mockResolvedValue(saved);
 
       await service.captureSnapshot('manual');
@@ -179,7 +192,9 @@ describe('ContractHealthSnapshotService', () => {
         new Error('rpc unavailable'),
       );
 
-      await expect(service.captureSnapshot()).rejects.toThrow('rpc unavailable');
+      await expect(service.captureSnapshot()).rejects.toThrow(
+        'rpc unavailable',
+      );
       expect(repo.save).not.toHaveBeenCalled();
     });
 
@@ -193,7 +208,7 @@ describe('ContractHealthSnapshotService', () => {
 
       await service.captureSnapshot();
 
-      const savedArg = repo.save.mock.calls[0][0] as Partial<ContractHealthSnapshot>;
+      const savedArg = repo.save.mock.calls[0][0];
       expect(savedArg.capturedAt).toEqual(new Date(checkedAt));
     });
   });
@@ -267,7 +282,9 @@ describe('ContractHealthSnapshotService', () => {
     it('throws NotFoundException when id does not exist', async () => {
       repo.findById.mockResolvedValue(null);
 
-      await expect(service.getById('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.getById('missing')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -421,8 +438,12 @@ describe('ContractHealthSnapshotService', () => {
 
       const diff = await service.getDiff();
 
-      expect(diff.baselineCapturedAt).toBe(SNAPSHOT_BASE.capturedAt.toISOString());
-      expect(diff.currentCapturedAt).toBe(SNAPSHOT_LATER.capturedAt.toISOString());
+      expect(diff.baselineCapturedAt).toBe(
+        SNAPSHOT_BASE.capturedAt.toISOString(),
+      );
+      expect(diff.currentCapturedAt).toBe(
+        SNAPSHOT_LATER.capturedAt.toISOString(),
+      );
     });
   });
 });

@@ -73,7 +73,9 @@ export class ContractHealthSnapshotService {
   async captureSnapshot(
     triggeredBy: 'scheduler' | 'manual' = 'scheduler',
   ): Promise<ContractHealthSnapshot> {
-    this.logger.log(`Capturing contract health snapshot (triggeredBy=${triggeredBy})`);
+    this.logger.log(
+      `Capturing contract health snapshot (triggeredBy=${triggeredBy})`,
+    );
 
     const report = await this.contractHealthService.getContractHealthReport();
 

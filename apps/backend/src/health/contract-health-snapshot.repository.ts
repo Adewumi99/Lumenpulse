@@ -24,7 +24,9 @@ export class ContractHealthSnapshotRepository {
   /**
    * Persist a new snapshot row.
    */
-  async save(snapshot: Partial<ContractHealthSnapshot>): Promise<ContractHealthSnapshot> {
+  async save(
+    snapshot: Partial<ContractHealthSnapshot>,
+  ): Promise<ContractHealthSnapshot> {
     const entity = this.repo.create(snapshot);
     return this.repo.save(entity);
   }

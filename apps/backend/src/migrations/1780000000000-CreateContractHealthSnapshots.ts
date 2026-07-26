@@ -6,9 +6,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Down migration drops the table cleanly.
  */
-export class CreateContractHealthSnapshots1780000000000
-  implements MigrationInterface
-{
+export class CreateContractHealthSnapshots1780000000000 implements MigrationInterface {
   name = 'CreateContractHealthSnapshots1780000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -38,14 +36,8 @@ export class CreateContractHealthSnapshots1780000000000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `DROP INDEX "public"."IDX_chs_network"`,
-    );
-    await queryRunner.query(
-      `DROP INDEX "public"."IDX_chs_captured_at"`,
-    );
-    await queryRunner.query(
-      `DROP TABLE "contract_health_snapshots"`,
-    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_chs_network"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_chs_captured_at"`);
+    await queryRunner.query(`DROP TABLE "contract_health_snapshots"`);
   }
 }
