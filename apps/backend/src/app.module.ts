@@ -63,6 +63,7 @@ import { TreasuryModule } from './treasury/treasury.module';
 import { VestingWalletModule } from './vesting-wallet/vesting-wallet.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { ContractAdminModule } from './contract-admin/contract-admin.module';
+import { PriceAlertModule } from './price-alert/price-alert.module';
 import { ContractHealthSnapshotModule } from './health/contract-health-snapshot.module';
 
 @Module({
@@ -136,6 +137,7 @@ import { ContractHealthSnapshotModule } from './health/contract-health-snapshot.
     VestingWalletModule,
     ContractsModule,
     ContractAdminModule,
+    PriceAlertModule,
     ContractHealthSnapshotModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
