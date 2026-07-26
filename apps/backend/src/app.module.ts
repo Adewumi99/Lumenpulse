@@ -14,6 +14,7 @@ import { TestExceptionController } from './test-exception.controller';
 import { SentimentModule } from './sentiment/sentiment.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AppCacheModule } from './cache/cache.module';
+import { WarmCacheModule } from './cache/warm-cache.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { StellarModule } from './stellar/stellar.module';
 import { PriceModule } from './price/price.module';
@@ -102,6 +103,7 @@ import { ReviewMetricsModule } from './review-metrics/review-metrics.module';
       },
     }),
     AppCacheModule,
+    WarmCacheModule,
     MetricsModule,
     SentimentModule,
     PortfolioModule,
