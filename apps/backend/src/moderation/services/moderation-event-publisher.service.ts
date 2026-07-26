@@ -54,9 +54,12 @@ export class ModerationEventPublisherService {
       );
     } catch (error) {
       // Log error without leaking sensitive data — only log event metadata
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
       this.logger.error(
-        `Failed to publish event ${eventType} for report ${report.id}: ${error.message}`,
-        error.stack,
+        `Failed to publish event ${eventType} for report ${report.id}: ${errorMessage}`,
+        errorStack,
       );
       // Do NOT rethrow — event emission must not block the state change
     }

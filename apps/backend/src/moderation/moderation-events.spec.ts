@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken, TypeOrmModule } from '@nestjs/typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Repository } from 'typeorm';
 import { ModerationService } from './moderation.service';
@@ -15,7 +15,6 @@ describe('ModerationService - Event Integration', () => {
   let service: ModerationService;
   let repository: Repository<ContentReport>;
   let mockQueue: any;
-  let eventPublisher: ModerationEventPublisherService;
 
   const mockReport: Partial<ContentReport> = {
     id: 'test-report-id',
@@ -63,9 +62,6 @@ describe('ModerationService - Event Integration', () => {
     service = module.get<ModerationService>(ModerationService);
     repository = module.get<Repository<ContentReport>>(
       getRepositoryToken(ContentReport),
-    );
-    eventPublisher = module.get<ModerationEventPublisherService>(
-      ModerationEventPublisherService,
     );
   });
 
