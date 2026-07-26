@@ -41,9 +41,9 @@ export class WarmCacheInitializerService implements OnModuleInit {
       name: 'grants:rounds',
       cacheKey: WARM_CACHE_KEY_GRANTS_ROUNDS,
       ttlMs: roundsTtl,
-      loader: async () => {
+      loader: () => {
         this.logger.debug('Preloading grants/rounds…');
-        return this.grantsService.listRounds();
+        return Promise.resolve(this.grantsService.listRounds());
       },
     });
 
@@ -52,13 +52,26 @@ export class WarmCacheInitializerService implements OnModuleInit {
       name: 'grants:leaderboard',
       cacheKey: WARM_CACHE_KEY_GRANTS_LEADERBOARD,
       ttlMs: leaderboardTtl,
-      loader: async () => {
+      loader: () => {
         this.logger.debug('Preloading grants/leaderboard…');
         // Preload leaderboard for the most relevant round (active or latest)
         const rounds = this.grantsService.listRounds();
-        const activeRound = rounds.find(r => r.status === 'ACTIVE') || rounds[0];
-        if (!activeRound) return { entries: [], totalCount: 0, hasMore: false, page: 1, limit: 20 };
-        return this.grantsService.getLeaderboard({ roundId: activeRound.id, limit: 20 } as any);
+        const activeRound =
+          rounds.find((r) => r.status === 'ACTIVE') || rounds[0];
+        if (!activeRound)
+          return Promise.resolve({
+            entries: [],
+            totalCount: 0,
+            hasMore: false,
+            page: 1,
+            limit: 20,
+          });
+        return Promise.resolve(
+          this.grantsService.getLeaderboard({
+            roundId: activeRound.id,
+            limit: 20,
+          }),
+        );
       },
     });
 
