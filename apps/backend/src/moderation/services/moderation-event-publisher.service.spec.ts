@@ -79,10 +79,15 @@ describe('ModerationEventPublisherService', () => {
     });
 
     it('should include all required public fields', async () => {
+      const reportUnderReview = {
+        ...mockReport,
+        status: ReportStatus.UNDER_REVIEW,
+      };
+
       await service.publishModerationEvent(
-        'moderation.resolved',
-        mockReport,
-        ReportStatus.UNDER_REVIEW,
+        'moderation.under_review',
+        reportUnderReview,
+        ReportStatus.PENDING,
       );
 
       expect(mockQueue.add).toHaveBeenCalledTimes(1);
@@ -92,17 +97,22 @@ describe('ModerationEventPublisherService', () => {
         reportId: 'test-report-id',
         targetType: ReportType.PROJECT,
         targetId: 'project-123',
-        previousStatus: ReportStatus.UNDER_REVIEW,
-        newStatus: ReportStatus.PENDING,
+        previousStatus: ReportStatus.PENDING,
+        newStatus: ReportStatus.UNDER_REVIEW,
         reason: ReportReason.SPAM,
       });
     });
 
     it('should not leak reviewer data when serialized to JSON', async () => {
+      const resolvedReport = {
+        ...mockReport,
+        status: ReportStatus.RESOLVED,
+      };
+
       await service.publishModerationEvent(
         'moderation.resolved',
-        mockReport,
-        ReportStatus.PENDING,
+        resolvedReport,
+        ReportStatus.UNDER_REVIEW,
       );
 
       expect(mockQueue.add).toHaveBeenCalledTimes(1);
