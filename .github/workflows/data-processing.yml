@@ -3,7 +3,7 @@ name: Data Processing CI
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "feature/**" ]
+    branches: [ "main" ]
     paths:
       - 'apps/data-processing/**'
   pull_request:
