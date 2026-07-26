@@ -173,7 +173,10 @@
     "of_pool": "占总池",
     "contributors": "位贡献者",
     "contributed": "已贡献",
-    "estimated_allocations": "预计分配"
+    "estimated_allocations": "预计分配",
+    "funding_progress": "筹资进度",
+    "milestones": "里程碑",
+    "no_eligible_projects": "该轮次尚未添加符合条件的项目。"
   },
   "news": {
     "title": "新闻",
