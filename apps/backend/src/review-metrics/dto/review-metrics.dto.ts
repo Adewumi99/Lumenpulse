@@ -34,8 +34,7 @@ export class ReviewMetricsQueryDto {
   moderationStatus?: ReportStatus;
 
   @ApiPropertyOptional({
-    description:
-      'Filter by anomaly status (applies only when domain=anomaly).',
+    description: 'Filter by anomaly status (applies only when domain=anomaly).',
     enum: PortfolioAnomalyStatus,
   })
   @IsOptional()

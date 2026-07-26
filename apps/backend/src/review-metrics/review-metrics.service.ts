@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ContentReport, ReportStatus } from '../moderation/entities/content-report.entity';
+import {
+  ContentReport,
+  ReportStatus,
+} from '../moderation/entities/content-report.entity';
 import {
   PortfolioAnomaly,
   PortfolioAnomalyStatus,
@@ -18,7 +21,11 @@ import {
  * Predefined aging buckets expressed as [minHours, maxHours).
  * The last bucket uses Infinity for an open upper bound.
  */
-const AGING_BUCKETS: { label: string; minHours: number; maxHours: number | null }[] = [
+const AGING_BUCKETS: {
+  label: string;
+  minHours: number;
+  maxHours: number | null;
+}[] = [
   { label: '< 1 hour', minHours: 0, maxHours: 1 },
   { label: '1–6 hours', minHours: 1, maxHours: 6 },
   { label: '6–24 hours', minHours: 6, maxHours: 24 },

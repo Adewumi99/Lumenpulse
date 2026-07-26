@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ReviewMetricsService } from './review-metrics.service';
-import { ContentReport, ReportStatus } from '../moderation/entities/content-report.entity';
-import { PortfolioAnomaly, PortfolioAnomalyStatus } from '../portfolio/entities/portfolio-anomaly.entity';
+import { ContentReport } from '../moderation/entities/content-report.entity';
+import { PortfolioAnomaly } from '../portfolio/entities/portfolio-anomaly.entity';
 import { ReviewDomain } from './dto/review-metrics.dto';
 
 describe('ReviewMetricsService', () => {
