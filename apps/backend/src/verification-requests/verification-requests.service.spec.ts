@@ -6,6 +6,14 @@ import {
   VerificationRequestTargetType,
 } from './entities/verification-request.entity';
 import { UserRole } from '../users/entities/user.entity';
+import { Repository } from 'typeorm';
+
+type VerificationRequestRepositoryMock = jest.Mocked<{
+  create: (value: Partial<VerificationRequest>) => VerificationRequest;
+  save: (value: VerificationRequest) => Promise<VerificationRequest>;
+  find: () => Promise<VerificationRequest[]>;
+  findOne: () => Promise<VerificationRequest | null>;
+}>;
 
 describe('VerificationRequestsService', () => {
   const request: VerificationRequest = {
@@ -19,13 +27,13 @@ describe('VerificationRequestsService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  const repository = {
-    create: jest.fn((value) => value),
-    save: jest.fn(async (value) => value),
+  const repository: VerificationRequestRepositoryMock = {
+    create: jest.fn((value: Partial<VerificationRequest>) => value as VerificationRequest),
+    save: jest.fn((value: VerificationRequest) => Promise.resolve(value)),
     find: jest.fn(),
     findOne: jest.fn(),
   };
-  const service = new VerificationRequestsService(repository as any);
+  const service = new VerificationRequestsService(repository as unknown as Repository<VerificationRequest>);
 
   beforeEach(() => jest.clearAllMocks());
 

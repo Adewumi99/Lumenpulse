@@ -8,9 +8,6 @@ on:
       - 'apps/onchain/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/onchain/**'
-      - 'apps/onchain/.ci-trigger'
 
 jobs:
   onchain-checks:

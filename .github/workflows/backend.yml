@@ -8,9 +8,6 @@ on:
       - 'apps/backend/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/backend/**'
-      - 'apps/backend/.ci-trigger'
 
 jobs:
   backend-checks:

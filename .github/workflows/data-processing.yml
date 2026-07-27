@@ -8,9 +8,6 @@ on:
       - 'apps/data-processing/**'
   pull_request:
     branches: [ "main" ]
-    paths:
-      - 'apps/data-processing/**'
-      - 'apps/data-processing/.ci-trigger'
 
 jobs:
   data-processing-checks:
