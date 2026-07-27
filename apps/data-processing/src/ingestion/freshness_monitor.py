@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Source Freshness SLA Monitor for the data-processing pipeline.
 
 Tracks freshness and delay budgets across news, price, and on-chain (Stellar)
