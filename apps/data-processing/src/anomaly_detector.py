@@ -557,10 +557,10 @@ class AnomalyDetector:
             
             if is_anomaly:
                 direction = "increase" if z_score > 0 else "decrease"
-                percent_change = ((current_value - mean) / mean) * 100 if mean != 0 else 0
+                percent_change = ((current_volume - mean) / mean) * 100 if mean != 0 else 0
                 reason = (
                     f"Volume {direction} of {abs(percent_change):.1f}% detected. "
-                    f"Current value ({current_value:.2f}) is {abs(z_score):.2f} standard deviations "
+                    f"Current value ({current_volume:.2f}) is {abs(z_score):.2f} standard deviations "
                     f"from baseline mean ({mean:.2f})."
                 )
                 contributing_signals = ["z_score_deviation", "volume_spike"]
