@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Tests for the Source Freshness SLA Monitor (issue #1060).
 
 Covers:
