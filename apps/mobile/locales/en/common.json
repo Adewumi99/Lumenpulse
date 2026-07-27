@@ -174,7 +174,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",
