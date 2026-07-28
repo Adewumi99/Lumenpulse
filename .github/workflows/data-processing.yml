@@ -1,13 +1,14 @@
 name: Data Processing CI
 
 on:
-  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
       - 'apps/data-processing/**'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'apps/data-processing/**'
 
 jobs:
   data-processing-checks:

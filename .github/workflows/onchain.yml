@@ -1,13 +1,14 @@
 name: Onchain CI
 
 on:
-  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
       - 'apps/onchain/**'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'apps/onchain/**'
 
 jobs:
   onchain-checks:
