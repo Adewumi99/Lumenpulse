@@ -1,10 +1,6 @@
 import * as Linking from 'expo-linking';
 import { WalletError } from '../errors';
-import {
-  WalletAdapter,
-  WalletConnectionResult,
-  WalletSigningResult,
-} from '../types';
+import { WalletAdapter, WalletConnectionResult, WalletSigningResult } from '../types';
 
 /**
  * SEP-0007 deep-link wallet adapter.
@@ -26,7 +22,9 @@ export class Sep7WalletAdapter implements WalletAdapter {
 
   async isAvailable(): Promise<boolean> {
     try {
-      return await Linking.canOpenURL('web+stellar:pay?destination=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&amount=0');
+      return await Linking.canOpenURL(
+        'web+stellar:pay?destination=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF&amount=0',
+      );
     } catch {
       return false;
     }

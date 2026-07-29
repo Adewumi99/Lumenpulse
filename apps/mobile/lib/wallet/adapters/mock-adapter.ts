@@ -1,22 +1,16 @@
 import { WalletError } from '../errors';
-import {
-  WalletAdapter,
-  WalletConnectionResult,
-  WalletSigningResult,
-} from '../types';
+import { WalletAdapter, WalletConnectionResult, WalletSigningResult } from '../types';
 
 /**
  * Deterministic mock public key used across dev flows so tests and demos
  * have a stable address without exposing real credentials.
  */
-const MOCK_PUBLIC_KEY =
-  'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+const MOCK_PUBLIC_KEY = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 
 function generateMockTxHash(): string {
-  return Array.from(
-    { length: 64 },
-    () => '0123456789abcdef'[Math.floor(Math.random() * 16)],
-  ).join('');
+  return Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join(
+    '',
+  );
 }
 
 /**
@@ -39,10 +33,7 @@ export class MockWalletAdapter implements WalletAdapter {
     if (!this.enabled) {
       return {
         status: 'failed',
-        error: new WalletError(
-          'not_available',
-          'Mock wallet is disabled in production builds.',
-        ),
+        error: new WalletError('not_available', 'Mock wallet is disabled in production builds.'),
       };
     }
 
@@ -53,10 +44,7 @@ export class MockWalletAdapter implements WalletAdapter {
     if (!this.enabled) {
       return {
         status: 'failed',
-        error: new WalletError(
-          'not_available',
-          'Mock wallet is disabled in production builds.',
-        ),
+        error: new WalletError('not_available', 'Mock wallet is disabled in production builds.'),
       };
     }
 

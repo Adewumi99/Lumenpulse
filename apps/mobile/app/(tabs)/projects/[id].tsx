@@ -285,7 +285,8 @@ export default function ProjectDetailScreen() {
           if (signResult.status === 'failed' || !signResult.txHash) {
             return {
               errorMessage:
-                signResult.error?.message ?? 'Wallet signing failed. Please check your wallet app and try again.',
+                signResult.error?.message ??
+                'Wallet signing failed. Please check your wallet app and try again.',
             };
           }
           finalTxHash = signResult.txHash;

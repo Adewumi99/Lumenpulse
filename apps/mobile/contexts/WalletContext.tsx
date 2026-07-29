@@ -6,11 +6,7 @@ import { useEnvironment } from './EnvironmentContext';
 import { storage, WalletNetworkTag, sanitizePublicKey } from '../lib/storage';
 import { WalletError } from '../lib/wallet/errors';
 import { getDefaultWalletAdapter } from '../lib/wallet/registry';
-import {
-  WalletAdapter,
-  WalletSigningResult,
-  WalletSigningState,
-} from '../lib/wallet/types';
+import { WalletAdapter, WalletSigningResult, WalletSigningState } from '../lib/wallet/types';
 
 export type WalletStatus =
   | 'disconnected'
@@ -90,11 +86,9 @@ function createDeferred<T>(): Deferred<T> {
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>('disconnected');
-  const [lastConnectedNetwork, setLastConnectedNetwork] =
-    useState<WalletNetworkTag | null>(null);
+  const [lastConnectedNetwork, setLastConnectedNetwork] = useState<WalletNetworkTag | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
-  const [lastRestoreOutcome, setLastRestoreOutcome] =
-    useState<WalletRestoreOutcome | null>(null);
+  const [lastRestoreOutcome, setLastRestoreOutcome] = useState<WalletRestoreOutcome | null>(null);
   const [signingState, setSigningState] = useState<WalletSigningState>('idle');
   const [lastSigningError, setLastSigningError] = useState<WalletError | null>(null);
   const { t } = useLocalization();
@@ -290,11 +284,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, []);
 
   const promptAdapterAction = useCallback(
-    (
-      intent: 'connect' | 'reconnect',
-      action: () => Promise<void>,
-    ): Promise<void> => {
-      const title = intent === 'reconnect' ? t('wallet.reconnect.title') : t('wallet.connect.title');
+    (intent: 'connect' | 'reconnect', action: () => Promise<void>): Promise<void> => {
+      const title =
+        intent === 'reconnect' ? t('wallet.reconnect.title') : t('wallet.connect.title');
       const message =
         intent === 'reconnect'
           ? t('wallet.reconnect.message', { network: environment })
@@ -403,10 +395,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (signingState === 'signing' || signingState === 'pending') {
         return {
           status: 'failed',
-          error: new WalletError(
-            'not_available',
-            t('wallet.sign.error_concurrent'),
-          ),
+          error: new WalletError('not_available', t('wallet.sign.error_concurrent')),
         };
       }
 
@@ -425,18 +414,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
           // Defensive timeout: if the wallet app never calls back, fail open
           // after five minutes so the UI is not stuck forever.
-          const timeoutId = setTimeout(() => {
-            if (pendingSignRef.current === deferred) {
-              pendingSignRef.current = null;
-              const err = new WalletError(
-                'unknown',
-                t('wallet.sign.error_timeout'),
-              );
-              setSigningState('failed');
-              setLastSigningError(err);
-              deferred.resolve({ status: 'failed', error: err });
-            }
-          }, 5 * 60 * 1000);
+          const timeoutId = setTimeout(
+            () => {
+              if (pendingSignRef.current === deferred) {
+                pendingSignRef.current = null;
+                const err = new WalletError('unknown', t('wallet.sign.error_timeout'));
+                setSigningState('failed');
+                setLastSigningError(err);
+                deferred.resolve({ status: 'failed', error: err });
+              }
+            },
+            5 * 60 * 1000,
+          );
 
           const finalResult = await deferred.promise;
           clearTimeout(timeoutId);

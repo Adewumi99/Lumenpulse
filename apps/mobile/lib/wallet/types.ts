@@ -6,13 +6,7 @@ import { WalletError } from './errors';
  * Kept separate from the connection lifecycle so screens can show
  * "Connected" while the wallet is actively signing a transaction.
  */
-export type WalletSigningState =
-  | 'idle'
-  | 'signing'
-  | 'pending'
-  | 'success'
-  | 'rejected'
-  | 'failed';
+export type WalletSigningState = 'idle' | 'signing' | 'pending' | 'success' | 'rejected' | 'failed';
 
 /**
  * Result returned by a signing attempt.

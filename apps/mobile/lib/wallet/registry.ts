@@ -11,9 +11,7 @@ import { WalletAdapter } from './types';
  * included in development builds and is intentionally last so it cannot be
  * accidentally preferred in production.
  */
-export function createWalletAdapterRegistry(
-  isDevelopment = config.isDevelopment,
-): WalletAdapter[] {
+export function createWalletAdapterRegistry(isDevelopment = config.isDevelopment): WalletAdapter[] {
   const adapters: WalletAdapter[] = [new Sep7WalletAdapter()];
 
   if (isDevelopment) {
