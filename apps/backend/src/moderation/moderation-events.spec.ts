@@ -193,6 +193,9 @@ describe('ModerationService - Event Integration', () => {
 
   describe('Privacy guarantees', () => {
     it('should never include reviewerId in event payload', async () => {
+      // Clear any previous calls
+      jest.clearAllMocks();
+
       const reportWithReviewer = {
         ...mockReport,
         status: ReportStatus.RESOLVED,
@@ -200,18 +203,26 @@ describe('ModerationService - Event Integration', () => {
         reviewNotes: 'Confidential notes',
       };
 
-      (repository.findOne as jest.Mock).mockResolvedValue(mockReport);
+      // Mock findOne with the exact call signature used by getReportById
+      (repository.findOne as jest.Mock).mockResolvedValue({
+        ...mockReport,
+        id: 'test-report-id',
+        status: ReportStatus.PENDING, // Original status
+      });
       (repository.save as jest.Mock).mockResolvedValue(reportWithReviewer);
 
       await service.updateReport('test-report-id', 'secret-reviewer-id', {
-        status: ReportStatus.RESOLVED,
+        status: ReportStatus.RESOLVED, // New status
         reviewNotes: 'Confidential notes',
       });
 
+      // Verify the queue was called
       expect(mockQueue.add).toHaveBeenCalledTimes(1);
-      const [, event] = mockQueue.add.mock.calls[0];
+      const [jobName, event] = mockQueue.add.mock.calls[0];
+      
+      expect(jobName).toBe('moderation-decision');
+      
       const serialized = JSON.stringify(event);
-
       expect(serialized).not.toContain('secret-reviewer-id');
       expect(serialized).not.toContain('Confidential notes');
     });
