@@ -53,6 +53,7 @@ pub struct RoundFinalizedEvent {
     #[topic]
     pub round_id: u64,
     pub admin: Address,
+    pub finalized_at: u64,
 }
 
 #[contractevent]
@@ -68,4 +69,13 @@ pub struct AllMatchesDistributedEvent {
     #[topic]
     pub round_id: u64,
     pub total_distributed: i128,
+}
+
+#[contractevent]
+pub struct RoundCapUpdatedEvent {
+    #[topic]
+    pub admin: Address,
+    #[topic]
+    pub round_id: u64,
+    pub cap: i128,
 }

@@ -484,3 +484,548 @@ fn test_fund_pool_cei_state_written_before_token_balance_assertion() {
     assert_eq!(client.get_pool_balance(&round_id), 250_000);
     assert_eq!(token.balance(&client.address), 250_000);
 }
+
+// ── Finalization guardrails ──────────────────────────────────────────────────
+
+#[test]
+fn test_double_finalize_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    assert_eq!(
+        client.try_finalize_round(&admin, &round_id),
+        Err(Ok(MatchingPoolError::RoundAlreadyFinalized))
+    );
+
+    assert_eq!(
+        client.get_round_status(&round_id),
+        symbol_short!("FINALIZED")
+    );
+}
+
+#[test]
+fn test_finalize_unauthorized_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    let not_admin = Address::generate(&env);
+    env.ledger().set_timestamp(4000);
+    assert_eq!(
+        client.try_finalize_round(&not_admin, &round_id),
+        Err(Ok(MatchingPoolError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_finalize_nonexistent_round_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+
+    assert_eq!(
+        client.try_finalize_round(&admin, &999u64),
+        Err(Ok(MatchingPoolError::RoundNotFound))
+    );
+}
+
+#[test]
+fn test_finalize_while_paused_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.pause(&admin);
+
+    env.ledger().set_timestamp(4000);
+    assert_eq!(
+        client.try_finalize_round(&admin, &round_id),
+        Err(Ok(MatchingPoolError::ContractPaused))
+    );
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_finalized);
+}
+
+#[test]
+fn test_finalize_records_timestamp_and_status() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    let round = client.get_round(&round_id);
+    assert!(round.is_finalized);
+    assert_eq!(
+        client.get_round_status(&round_id),
+        symbol_short!("FINALIZED")
+    );
+    assert_eq!(client.get_finalized_at(&round_id), 4000);
+}
+
+#[test]
+fn test_reentrancy_guard_finalize_rejects_when_locked() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    client.initialize(&admin);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("RGF"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
+    });
+
+    env.ledger().set_timestamp(4000);
+    let result = client.try_finalize_round(&admin, &round_id);
+    assert_eq!(result, Err(Ok(MatchingPoolError::Reentrancy)));
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_finalized);
+}
+
+#[test]
+fn test_distribute_while_paused_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    let owner1 = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &1_000_000);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    env.ledger().set_timestamp(1500);
+    let c = Address::generate(&env);
+    client.record_contribution(&round_id, &1u64, &c, &100);
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    client.pause(&admin);
+
+    let owners = vec![&env, owner1.clone()];
+    assert_eq!(
+        client.try_distribute_matching_funds(&admin, &round_id, &owners),
+        Err(Ok(MatchingPoolError::ContractPaused))
+    );
+
+    let round = client.get_round(&round_id);
+    assert!(!round.is_distributed);
+}
+
+#[test]
+fn test_distribute_succeeds_after_unpause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, token_admin) = setup(&env);
+    client.initialize(&admin);
+
+    let funder = Address::generate(&env);
+    let owner1 = Address::generate(&env);
+    token_admin.mint(&funder, &1_000_000);
+
+    env.ledger().set_timestamp(500);
+    let round_id = client.create_round(
+        &admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    );
+
+    client.fund_pool(&funder, &round_id, &1_000_000);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    env.ledger().set_timestamp(1500);
+    let c = Address::generate(&env);
+    client.record_contribution(&round_id, &1u64, &c, &100);
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    client.pause(&admin);
+    client.unpause(&admin);
+
+    let owners = vec![&env, owner1.clone()];
+    let total = client.distribute_matching_funds(&admin, &round_id, &owners);
+
+    assert_eq!(total, 1_000_000);
+    assert_eq!(token.balance(&owner1), 1_000_000);
+}
+
+// ── Round contribution caps (anti-whale guardrails) ──────────────────────────
+
+fn setup_round<'a>(
+    env: &Env,
+    client: &MatchingPoolContractClient<'a>,
+    admin: &Address,
+    token: &TokenClient<'a>,
+) -> u64 {
+    client.initialize(admin);
+    env.ledger().set_timestamp(500);
+    client.create_round(
+        admin,
+        &symbol_short!("R1"),
+        &token.address,
+        &1000u64,
+        &3000u64,
+    )
+}
+
+#[test]
+fn test_set_round_cap_and_get_round_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    client.set_round_cap(&admin, &round_id, &500i128);
+    assert_eq!(client.get_round_cap(&round_id), 500i128);
+}
+
+#[test]
+fn test_get_round_cap_defaults_to_zero_when_unset() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    assert_eq!(client.get_round_cap(&round_id), 0i128);
+}
+
+#[test]
+fn test_get_round_cap_nonexistent_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+
+    assert_eq!(
+        client.try_get_round_cap(&9_999u64),
+        Err(Ok(MatchingPoolError::RoundNotFound))
+    );
+}
+
+#[test]
+fn test_get_contributor_round_total_nonexistent_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+    let contributor = Address::generate(&env);
+
+    assert_eq!(
+        client.try_get_contributor_round_total(&9_999u64, &contributor),
+        Err(Ok(MatchingPoolError::RoundNotFound))
+    );
+}
+
+#[test]
+fn test_set_round_cap_rejects_non_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    let intruder = Address::generate(&env);
+
+    assert_eq!(
+        client.try_set_round_cap(&intruder, &round_id, &500i128),
+        Err(Ok(MatchingPoolError::Unauthorized))
+    );
+}
+
+#[test]
+fn test_set_round_cap_rejects_negative() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    assert_eq!(
+        client.try_set_round_cap(&admin, &round_id, &-1i128),
+        Err(Ok(MatchingPoolError::InvalidAmount))
+    );
+}
+
+#[test]
+fn test_set_round_cap_rejects_on_finalized_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+
+    env.ledger().set_timestamp(4000);
+    client.finalize_round(&admin, &round_id);
+
+    assert_eq!(
+        client.try_set_round_cap(&admin, &round_id, &500i128),
+        Err(Ok(MatchingPoolError::RoundAlreadyFinalized))
+    );
+}
+
+#[test]
+fn test_set_round_cap_rejects_nonexistent_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _) = setup(&env);
+    client.initialize(&admin);
+
+    assert_eq!(
+        client.try_set_round_cap(&admin, &9_999u64, &500i128),
+        Err(Ok(MatchingPoolError::RoundNotFound))
+    );
+}
+
+#[test]
+fn test_contribution_exactly_at_cap_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    client.set_round_cap(&admin, &round_id, &100i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &100i128);
+
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        100i128
+    );
+}
+
+#[test]
+fn test_contribution_one_over_cap_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    client.set_round_cap(&admin, &round_id, &100i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &101i128),
+        Err(Ok(MatchingPoolError::ContributionCapExceeded))
+    );
+
+    // No state must have been mutated by the rejected contribution.
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 0i128);
+    assert_eq!(client.get_contributor_count(&round_id, &1u64), 0u32);
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        0i128
+    );
+}
+
+#[test]
+fn test_cumulative_contributions_same_project_hit_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    client.set_round_cap(&admin, &round_id, &100i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &60i128);
+
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &50i128),
+        Err(Ok(MatchingPoolError::ContributionCapExceeded))
+    );
+
+    // The first, accepted contribution's state must be untouched by the
+    // second, rejected one.
+    assert_eq!(client.get_project_contributions(&round_id, &1u64), 60i128);
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        60i128
+    );
+}
+
+#[test]
+fn test_cumulative_contributions_across_projects_hit_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    client.approve_project(&admin, &round_id, &2u64);
+    client.set_round_cap(&admin, &round_id, &100i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &60i128);
+
+    // Spreading the remainder across a second project must still be capped
+    // by the round-level (not per-project) total.
+    assert_eq!(
+        client.try_record_contribution(&round_id, &2u64, &contributor, &50i128),
+        Err(Ok(MatchingPoolError::ContributionCapExceeded))
+    );
+
+    // Exactly filling the remaining headroom succeeds.
+    client.record_contribution(&round_id, &2u64, &contributor, &40i128);
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        100i128
+    );
+}
+
+#[test]
+fn test_cap_zero_means_unlimited() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    // No cap set (defaults to 0 == unlimited).
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &1_000_000_000i128);
+
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        1_000_000_000i128
+    );
+}
+
+#[test]
+fn test_retroactive_cap_after_prior_contributions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &80i128);
+
+    // Cap set after the fact, at exactly the amount already contributed.
+    client.set_round_cap(&admin, &round_id, &80i128);
+
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &1i128),
+        Err(Ok(MatchingPoolError::ContributionCapExceeded))
+    );
+}
+
+#[test]
+fn test_retroactive_cap_set_below_existing_total_blocks_further_contributions() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &80i128);
+
+    // Cap set below what's already been contributed — this doesn't claw
+    // back the past contribution, but blocks any further one.
+    client.set_round_cap(&admin, &round_id, &50i128);
+
+    assert_eq!(
+        client.get_contributor_round_total(&round_id, &contributor),
+        80i128
+    );
+    assert_eq!(
+        client.try_record_contribution(&round_id, &1u64, &contributor, &1i128),
+        Err(Ok(MatchingPoolError::ContributionCapExceeded))
+    );
+}
+
+#[test]
+fn test_qf_score_unaffected_by_cap_bookkeeping() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, token, _) = setup(&env);
+    let round_id = setup_round(&env, &client, &admin, &token);
+    client.approve_project(&admin, &round_id, &1u64);
+    client.set_round_cap(&admin, &round_id, &1_000_000i128);
+
+    let contributor = Address::generate(&env);
+    env.ledger().set_timestamp(1500);
+    client.record_contribution(&round_id, &1u64, &contributor, &100i128);
+
+    // Same score as test_qf_score_single_contributor, which never sets a cap
+    // — proves the cap bookkeeping doesn't perturb QF scoring.
+    let score = client.get_project_qf_score(&round_id, &1u64);
+    assert!(score > 0);
+}

@@ -245,6 +245,41 @@ impl MatchingPoolContract {
         Ok(())
     }
 
+    /// Set (or update) the round-level contribution cap, i.e. the maximum a
+    /// single contributor may put into the round in total, summed across
+    /// every eligible project (admin only). A cap of 0 means uncapped.
+    /// Changing the cap only affects future contributions — it never claws
+    /// back or invalidates contributions already recorded.
+    pub fn set_round_cap(
+        env: Env,
+        admin: Address,
+        round_id: u64,
+        cap: i128,
+    ) -> Result<(), MatchingPoolError> {
+        Self::require_admin(&env, &admin)?;
+        if cap < 0 {
+            return Err(MatchingPoolError::InvalidAmount);
+        }
+        let round: RoundData = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        if round.is_finalized {
+            return Err(MatchingPoolError::RoundAlreadyFinalized);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundCap(round_id), &cap);
+        events::RoundCapUpdatedEvent {
+            admin,
+            round_id,
+            cap,
+        }
+        .publish(&env);
+        Ok(())
+    }
+
     pub fn record_contribution(
         env: Env,
         round_id: u64,
@@ -276,6 +311,23 @@ impl MatchingPoolContract {
         {
             return Err(MatchingPoolError::ProjectNotEligible);
         }
+        let round_total_key = DataKey::ContributorRoundTotal(round_id, contributor.clone());
+        let prior_round_total: i128 = env
+            .storage()
+            .persistent()
+            .get(&round_total_key)
+            .unwrap_or(0);
+        let new_round_total = prior_round_total
+            .checked_add(amount)
+            .ok_or(MatchingPoolError::InvalidAmount)?;
+        let cap: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCap(round_id))
+            .unwrap_or(0);
+        if cap > 0 && new_round_total > cap {
+            return Err(MatchingPoolError::ContributionCapExceeded);
+        }
         let contrib_key = DataKey::ContributorAmount(round_id, project_id, contributor.clone());
         let prev: i128 = env.storage().persistent().get(&contrib_key).unwrap_or(0);
         if prev == 0 {
@@ -295,6 +347,9 @@ impl MatchingPoolContract {
         env.storage()
             .persistent()
             .set(&total_key, &(total + amount));
+        env.storage()
+            .persistent()
+            .set(&round_total_key, &new_round_total);
         events::ContributionRecordedEvent {
             round_id,
             project_id,
@@ -310,28 +365,45 @@ impl MatchingPoolContract {
         admin: Address,
         round_id: u64,
     ) -> Result<(), MatchingPoolError> {
-        Self::require_admin(&env, &admin)?;
-        let mut round: RoundData = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Round(round_id))
-            .ok_or(MatchingPoolError::RoundNotFound)?;
-        if round.is_finalized {
-            return Err(MatchingPoolError::RoundAlreadyFinalized);
-        }
-        if env.ledger().timestamp() <= round.end_time {
-            return Err(MatchingPoolError::RoundStillOpen);
-        }
-        round.is_finalized = true;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Round(round_id), &round);
-        env.storage().persistent().set(
-            &DataKey::RoundStatus(round_id),
-            &Symbol::new(&env, "FINALIZED"),
-        );
-        events::RoundFinalizedEvent { round_id, admin }.publish(&env);
-        Ok(())
+        Self::with_reentrancy_guard(&env, || {
+            Self::require_admin(&env, &admin)?;
+            Self::require_not_paused(&env)?;
+
+            let mut round: RoundData = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Round(round_id))
+                .ok_or(MatchingPoolError::RoundNotFound)?;
+
+            if round.is_finalized {
+                return Err(MatchingPoolError::RoundAlreadyFinalized);
+            }
+
+            let now = env.ledger().timestamp();
+            if now <= round.end_time {
+                return Err(MatchingPoolError::RoundStillOpen);
+            }
+
+            round.is_finalized = true;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Round(round_id), &round);
+            env.storage().persistent().set(
+                &DataKey::RoundStatus(round_id),
+                &Symbol::new(&env, "FINALIZED"),
+            );
+            env.storage()
+                .persistent()
+                .set(&DataKey::FinalizedAt(round_id), &now);
+
+            events::RoundFinalizedEvent {
+                round_id,
+                admin,
+                finalized_at: now,
+            }
+            .publish(&env);
+            Ok(())
+        })
     }
 
     pub fn distribute_matching_funds(
@@ -342,6 +414,7 @@ impl MatchingPoolContract {
     ) -> Result<i128, MatchingPoolError> {
         Self::with_reentrancy_guard(&env, || {
             Self::require_admin(&env, &admin)?;
+            Self::require_not_paused(&env)?;
             let mut round: RoundData = env
                 .storage()
                 .persistent()
@@ -632,6 +705,37 @@ impl MatchingPoolContract {
             .unwrap_or(0))
     }
 
+    /// The round-level contribution cap (0 means uncapped).
+    pub fn get_round_cap(env: Env, round_id: u64) -> Result<i128, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundCap(round_id))
+            .unwrap_or(0))
+    }
+
+    /// A contributor's cumulative recorded contributions to a round, summed
+    /// across every project in that round.
+    pub fn get_contributor_round_total(
+        env: Env,
+        round_id: u64,
+        contributor: Address,
+    ) -> Result<i128, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::ContributorRoundTotal(round_id, contributor))
+            .unwrap_or(0))
+    }
+
     pub fn get_round_status(env: Env, round_id: u64) -> Result<Symbol, MatchingPoolError> {
         env.storage()
             .persistent()
@@ -642,6 +746,17 @@ impl MatchingPoolContract {
             .persistent()
             .get(&DataKey::RoundStatus(round_id))
             .unwrap_or(Symbol::new(&env, "ACTIVE")))
+    }
+
+    pub fn get_finalized_at(env: Env, round_id: u64) -> Result<u64, MatchingPoolError> {
+        env.storage()
+            .persistent()
+            .get::<_, RoundData>(&DataKey::Round(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::FinalizedAt(round_id))
+            .ok_or(MatchingPoolError::RoundNotFound)
     }
 
     pub fn get_admin(env: Env) -> Result<Address, MatchingPoolError> {
@@ -686,3 +801,5 @@ impl MatchingPoolContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod tests;
