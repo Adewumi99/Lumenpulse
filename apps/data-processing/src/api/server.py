@@ -69,6 +69,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def metrics_and_logging_middleware(request: Request, call_next):
     corr_id = request.headers.get("X-Correlation-ID", generate_correlation_id())
@@ -84,20 +85,20 @@ async def metrics_and_logging_middleware(request: Request, call_next):
         logger.error("Unhandled exception during request processing", exc_info=True)
         raise
 
+
 # Initialize your existing SentimentAnalyzer
 sentiment_analyzer = SentimentAnalyzer()
 
-# Ingestion quality check routes
+# Import and register routers
 from src.api.ingestion_quality_routes import router as ingestion_quality_router
-app.include_router(ingestion_quality_router)
-
-# Entity linking review queue routes
 from src.api.review_queue_routes import router as review_queue_router
-app.include_router(review_queue_router)
-
-# Ledger cursor operational visibility routes
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
+from src.api.kpi_routes import router as kpi_router
+
+app.include_router(ingestion_quality_router)
+app.include_router(review_queue_router)
 app.include_router(ledger_cursor_router)
+app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 
 
 try:
@@ -196,6 +197,7 @@ async def metrics():
     """Expose Prometheus metrics"""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+
 @app.get("/")
 @limiter.limit("20/minute") if limiter else lambda x: x
 async def root(request: Request) -> Dict[str, Any]:
@@ -212,16 +214,20 @@ async def root(request: Request) -> Dict[str, Any]:
             "POST /analyze-batch": "Batch analyze multiple texts (requires X-API-Key header)",
             "GET /contributors/{contributor}/timeline": "Get contributor activity timeline from on-chain events (requires X-API-Key header)",
             "GET /sentiment/legend": "Get colour legend for sentiment indicators (no auth required)",
+            # KPI endpoints (Issue #734)
+            "GET /api/kpi/latest": "Get latest KPI snapshot (TVL, Volume) (requires X-API-Key header)",
+            "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
+            "POST /api/kpi/recompute": "Trigger KPI recompute from events (Admin only, requires X-API-Key header)",
+            "POST /api/kpi/recompute-async": "Trigger async KPI recompute (Admin only, requires X-API-Key header)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
-        "security": "All endpoints except /health and /metrics require X-API-Key header",
+        "security": "All endpoints except /health, /metrics, and /sentiment/legend require X-API-Key header",
     }
 
 
 @app.get("/health", response_model=HealthResponse)
 @limiter.limit("30/minute") if limiter else lambda x: x
 async def health_check(request: Request) -> HealthResponse:
-
     """Health check endpoint for monitoring"""
     return HealthResponse(
         status="healthy",
