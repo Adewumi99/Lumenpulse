@@ -94,11 +94,13 @@ from src.api.ingestion_quality_routes import router as ingestion_quality_router
 from src.api.review_queue_routes import router as review_queue_router
 from src.api.ledger_cursor_routes import router as ledger_cursor_router
 from src.api.kpi_routes import router as kpi_router
+from src.api.account_operation_routes import router as account_operation_router
 
 app.include_router(ingestion_quality_router)
 app.include_router(review_queue_router)
 app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
+app.include_router(account_operation_router)  # Account operation ingestion
 
 
 try:
@@ -219,6 +221,11 @@ async def root(request: Request) -> Dict[str, Any]:
             "GET /api/kpi/series": "Get KPI time series data (requires X-API-Key header)",
             "POST /api/kpi/recompute": "Trigger KPI recompute from events (Admin only, requires X-API-Key header)",
             "POST /api/kpi/recompute-async": "Trigger async KPI recompute (Admin only, requires X-API-Key header)",
+            # Account operation endpoints (Issue #743)
+            "POST /api/account-operations/ingest": "Ingest account operations from Horizon (Admin only, requires X-API-Key header)",
+            "GET /api/account-operations/status": "Get ingestion status (Admin only, requires X-API-Key header)",
+            "POST /api/account-operations/reset-cursor": "Reset ingestion cursor (Admin only, requires X-API-Key header)",
+            "GET /api/account-operations/operations": "Get account operations from database (Admin only, requires X-API-Key header)",
         },
         "note": "Returns sentiment score between -1 (negative) and 1 (positive)",
         "security": "All endpoints except /health, /metrics, and /sentiment/legend require X-API-Key header",
