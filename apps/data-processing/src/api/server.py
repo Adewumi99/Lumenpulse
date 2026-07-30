@@ -33,6 +33,7 @@ from src.db import PostgresService
 from src.ingestion.stellar_ingestion_checks import run_all_checks
 
 from src.analytics.sentiment_indicators import SentimentIndicatorMapper, get_legend as sentiment_legend
+from src.api.rebuild_routes import router as rebuild_router
 
 _indicator_mapper = SentimentIndicatorMapper()
 
@@ -101,6 +102,7 @@ app.include_router(review_queue_router)
 app.include_router(ledger_cursor_router)
 app.include_router(kpi_router)  # KPI routes for TVL and volume computation
 app.include_router(account_operation_router)  # Account operation ingestion
+app.include_router(rebuild_router)  # Rebuild routes for admin
 
 
 try:
