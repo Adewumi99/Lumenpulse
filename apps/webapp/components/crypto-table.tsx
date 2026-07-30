@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { CryptoApiService, transformCryptoData, CryptoApiData } from "@/lib/api-services";
 import { WatchlistItemType } from "@/lib/watchlist-service";
-import { WatchlistProvider, useWatchlist } from "@/hooks/use-watchlist";
+import { useWatchlist } from "@/hooks/use-watchlist";
 
 interface CryptoData {
   id: number;
