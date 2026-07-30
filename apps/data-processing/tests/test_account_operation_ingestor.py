@@ -90,15 +90,16 @@ class TestAccountOperationIngestor(unittest.TestCase):
     def setUp(self):
         # Every test constructs AccountOperationIngestor() with no args, which
         # would otherwise try to open a real Postgres connection.
-        self.enterContext(
-            patch("src.ingestion.account_operation_ingestor.PostgresService")
-        )
-        self.enterContext(
-            patch("src.ingestion.account_operation_ingestor.LedgerCursorStore")
-        )
-        self.enterContext(
-            patch("src.ingestion.account_operation_ingestor.StellarDataFetcher")
-        )
+        # Note: self.enterContext() requires Python 3.11+; CI runs 3.9, so we
+        # use the patch().start()/addCleanup(patch.stop) pattern instead.
+        for target in (
+            "src.ingestion.account_operation_ingestor.PostgresService",
+            "src.ingestion.account_operation_ingestor.LedgerCursorStore",
+            "src.ingestion.account_operation_ingestor.StellarDataFetcher",
+        ):
+            patcher = patch(target)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_init(self):
         ingestor = AccountOperationIngestor(
