@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ReadModelRebuildService } from './read-model-rebuild.service';
-import { RebuildDataset, RebuildStatus } from './entities/read-model-rebuild-job.entity';
+import { RebuildStatus } from './entities/read-model-rebuild-job.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ReadModelRebuildJob } from './entities/read-model-rebuild-job.entity';
@@ -26,7 +26,9 @@ export class ReadModelRebuildScheduler {
       const result = await this.rebuildService.cleanupJobs(30);
       this.logger.log(`Cleanup completed: ${result.deleted} jobs deleted`);
     } catch (error) {
-      this.logger.error(`Cleanup failed: ${error.message}`, error.stack);
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Cleanup failed: ${message}`, stack);
     }
   }
 
@@ -50,7 +52,9 @@ export class ReadModelRebuildScheduler {
         return;
       }
 
-      this.logger.warn(`Found ${stuckJobs.length} stuck rebuild jobs, attempting recovery...`);
+      this.logger.warn(
+        `Found ${stuckJobs.length} stuck rebuild jobs, attempting recovery...`,
+      );
 
       for (const job of stuckJobs) {
         job.status = RebuildStatus.FAILED;
@@ -65,7 +69,9 @@ export class ReadModelRebuildScheduler {
         this.logger.warn(`Recovered stuck job ${job.id}`);
       }
     } catch (error) {
-      this.logger.error(`Stuck job recovery failed: ${error.message}`, error.stack);
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Stuck job recovery failed: ${message}`, stack);
     }
   }
 

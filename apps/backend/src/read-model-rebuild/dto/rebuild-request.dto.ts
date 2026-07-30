@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { RebuildDataset } from '../entities/read-model-rebuild-job.entity';
 
 export class RebuildRequestDto {

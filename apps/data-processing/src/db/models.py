@@ -770,20 +770,3 @@ class DailyOnchainKPISnapshot(Base):
             f"tvl={self.tvl}, volume={self.volume}, active_rounds={self.active_rounds}, "
             f"contribution_count={self.contribution_count})>"
         )
-
-
-# KPI event type support - additional constants for event classification
-KPI_EVENT_TYPES = {
-    "deposit": "deposit",
-    "withdraw": "withdraw", 
-    "contribution": "contribution",
-    "milestone": "milestone",
-}
-
-# Operation types for KPI computation
-KPI_OPERATIONS = {
-    "deposit": "deposit",
-    "withdraw": "withdraw",
-    "contribution": "contribution",
-    "milestone": "milestone",
-}

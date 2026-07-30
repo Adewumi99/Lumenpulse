@@ -12,7 +12,12 @@ import {
   HttpCode,
   Logger,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ReadModelRebuildService } from './read-model-rebuild.service';
 import { RebuildRequestDto } from './dto/rebuild-request.dto';
 import {
@@ -20,11 +25,17 @@ import {
   RebuildStatusResponseDto,
   RebuildTriggerResponseDto,
 } from './dto/rebuild-response.dto';
-import { RebuildDataset, RebuildStatus } from './entities/read-model-rebuild-job.entity';
+import {
+  RebuildDataset,
+  RebuildStatus,
+} from './entities/read-model-rebuild-job.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/decorators/auth.decorators';
-import { Request as ExpressRequest } from 'express';
+import { Roles, UserRole } from '../auth/decorators/auth.decorators';
+
+interface AuthenticatedRequest {
+  user: { userId?: string; sub?: string };
+}
 
 @ApiTags('Read Model Rebuild')
 @ApiBearerAuth()
@@ -33,15 +44,14 @@ import { Request as ExpressRequest } from 'express';
 export class ReadModelRebuildController {
   private readonly logger = new Logger(ReadModelRebuildController.name);
 
-  constructor(
-    private readonly rebuildService: ReadModelRebuildService,
-  ) {}
+  constructor(private readonly rebuildService: ReadModelRebuildService) {}
 
   @Post('rebuild')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Trigger a read-model rebuild',
-    description: 'Admin-only endpoint to rebuild derived datasets when ingestion logic changes',
+    description:
+      'Admin-only endpoint to rebuild derived datasets when ingestion logic changes',
   })
   @ApiResponse({
     status: HttpStatus.ACCEPTED,
@@ -58,17 +68,19 @@ export class ReadModelRebuildController {
   })
   async triggerRebuild(
     @Body() dto: RebuildRequestDto,
-    @Request() req: ExpressRequest,
+    @Request() req: AuthenticatedRequest,
   ): Promise<RebuildTriggerResponseDto> {
-    const userId = (req.user as any)?.userId || (req.user as any)?.sub || 'unknown';
-    
-    this.logger.log(`Rebuild requested by ${userId} for dataset=${dto.dataset}, contract=${dto.contractId || 'all'}`);
-    
+    const userId = req.user?.userId || req.user?.sub || 'unknown';
+
+    this.logger.log(
+      `Rebuild requested by ${userId} for dataset=${dto.dataset}, contract=${dto.contractId || 'all'}`,
+    );
+
     return this.rebuildService.triggerRebuild(dto, userId);
   }
 
   @Get('jobs/:jobId')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get rebuild job status',
     description: 'Get detailed status of a rebuild job including progress',
@@ -89,7 +101,7 @@ export class ReadModelRebuildController {
   }
 
   @Get('jobs')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'List rebuild jobs',
     description: 'List recent rebuild jobs with optional filters',
@@ -109,7 +121,7 @@ export class ReadModelRebuildController {
   }
 
   @Delete('jobs/:jobId/cancel')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancel a rebuild job',
@@ -129,18 +141,19 @@ export class ReadModelRebuildController {
   })
   async cancelJob(
     @Param('jobId') jobId: string,
-    @Request() req: ExpressRequest,
+    @Request() req: AuthenticatedRequest,
   ): Promise<{ success: boolean; message: string }> {
-    const userId = (req.user as any)?.userId || (req.user as any)?.sub || 'unknown';
+    const userId = req.user?.userId || req.user?.sub || 'unknown';
     return this.rebuildService.cancelJob(jobId, userId);
   }
 
   @Delete('jobs/cleanup')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Clean up old jobs',
-    description: 'Delete completed/failed/cancelled jobs older than specified days',
+    description:
+      'Delete completed/failed/cancelled jobs older than specified days',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -154,7 +167,7 @@ export class ReadModelRebuildController {
   }
 
   @Get('datasets')
-  @Roles('admin', 'superadmin')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'List available datasets',
     description: 'Get list of datasets that can be rebuilt',
@@ -163,14 +176,31 @@ export class ReadModelRebuildController {
     status: HttpStatus.OK,
     description: 'Datasets listed',
   })
-  async listDatasets(): Promise<{ datasets: { name: string; description: string }[] }> {
+  listDatasets(): {
+    datasets: { name: string; description: string }[];
+  } {
     return {
       datasets: [
-        { name: RebuildDataset.KPI_SNAPSHOTS, description: 'Daily KPI snapshots (TVL, Volume)' },
-        { name: RebuildDataset.PROJECT_VIEWS, description: 'Aggregated project views' },
-        { name: RebuildDataset.CONTRACT_EVENTS, description: 'Contract event materialization' },
-        { name: RebuildDataset.DAILY_METRICS, description: 'Daily metric aggregates' },
-        { name: RebuildDataset.ALL, description: 'All datasets (full rebuild)' },
+        {
+          name: RebuildDataset.KPI_SNAPSHOTS,
+          description: 'Daily KPI snapshots (TVL, Volume)',
+        },
+        {
+          name: RebuildDataset.PROJECT_VIEWS,
+          description: 'Aggregated project views',
+        },
+        {
+          name: RebuildDataset.CONTRACT_EVENTS,
+          description: 'Contract event materialization',
+        },
+        {
+          name: RebuildDataset.DAILY_METRICS,
+          description: 'Daily metric aggregates',
+        },
+        {
+          name: RebuildDataset.ALL,
+          description: 'All datasets (full rebuild)',
+        },
       ],
     };
   }

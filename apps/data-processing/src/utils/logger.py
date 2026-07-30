@@ -9,7 +9,7 @@ import logging
 import sys
 import contextvars
 import uuid
-from typing import Optional
+from typing import Optional, Union
 from pythonjsonlogger import jsonlogger
 
 # Context variable for correlation ID
@@ -35,38 +35,44 @@ class SimpleFormatter(logging.Formatter):
 
 def setup_logger(
     name: Optional[str] = None,
-    level: str = "INFO",
+    level: Union[str, int] = "INFO",
     format_string: Optional[str] = None,
     json_format: bool = False,
 ) -> logging.Logger:
     """
     Set up a logger with consistent formatting.
-    
+
     Args:
         name: Logger name (defaults to root)
-        level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        level: Log level, either a name (DEBUG, INFO, WARNING, ERROR,
+            CRITICAL) or a numeric level such as logging.INFO
         format_string: Custom format string (for text format only)
         json_format: Use JSON format instead of text
-        
+
     Returns:
         Configured logger instance
-        
+
     Examples:
         # Text format logger
         logger = setup_logger("my_service", level="DEBUG")
-        
+
         # JSON format logger with correlation ID
         logger = setup_logger("my_service", json_format=True)
     """
     logger_name = name or __name__
-    
+
     # Check if logger already exists and has handlers
     existing_logger = logging.getLogger(logger_name)
     if existing_logger.handlers:
         return existing_logger
-    
+
     logger = logging.getLogger(logger_name)
-    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+    resolved_level = (
+        getattr(logging, level.upper(), logging.INFO)
+        if isinstance(level, str)
+        else level
+    )
+    logger.setLevel(resolved_level)
     logger.propagate = False
     
     # Create handler

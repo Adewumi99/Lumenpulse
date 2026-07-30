@@ -14,17 +14,20 @@ from __future__ import annotations
 import time
 import os
 from typing import Dict, List, Optional, Any, Set, Tuple
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 
-from stellar_sdk import Server, Asset
-from stellar_sdk.exceptions import NotFoundError, BadRequestError, ConnectionError, RateLimitExceededError
+from stellar_sdk.exceptions import BadRequestError, ConnectionError
+
+# Horizon has no dedicated rate-limit exception; a 429 response surfaces as a
+# BadRequestError with `.status == 429`, so it must be distinguished by status code.
+HORIZON_RATE_LIMIT_STATUS = 429
 
 from src.utils.logger import setup_logger
 from src.db.postgres_service import PostgresService
 from src.db.models import ContractEvent, RawSorobanEvent
-from src.ingestion.ledger_cursor_store import LedgerCursorStore, LedgerCursorRow
+from src.ingestion.ledger_cursor_store import LedgerCursorStore
 from src.ingestion.stellar_fetcher import StellarDataFetcher
 
 logger = setup_logger(__name__)
@@ -46,7 +49,6 @@ class OperationType(str, Enum):
     INFLATION = "inflation"
     MANAGE_DATA = "manage_data"
     BUMP_SEQUENCE = "bump_sequence"
-    MANAGE_BUY_OFFER = "manage_buy_offer"
     CREATE_CLAIMABLE_BALANCE = "create_claimable_balance"
     CLAIM_CLAIMABLE_BALANCE = "claim_claimable_balance"
     BEGIN_SPONSORING_FUTURE_RESERVES = "begin_sponsoring_future_reserves"
@@ -413,10 +415,13 @@ class AccountOperationIngestor:
             
             return records, next_cursor
             
-        except RateLimitExceededError as e:
-            logger.warning(f"Rate limit exceeded: {e}")
+        except BadRequestError as e:
+            if e.status == HORIZON_RATE_LIMIT_STATUS:
+                logger.warning(f"Rate limit exceeded: {e}")
+            else:
+                logger.error(f"Horizon API error: {e}")
             raise
-        except (ConnectionError, BadRequestError) as e:
+        except ConnectionError as e:
             logger.error(f"Horizon API error: {e}")
             raise
         except Exception as e:
@@ -456,17 +461,23 @@ class AccountOperationIngestor:
                     limit=limit,
                 )
                 
-            except RateLimitExceededError:
+            except BadRequestError as e:
                 retry_count += 1
-                backoff *= self.RATE_LIMIT_BACKOFF_FACTOR
-                logger.warning(
-                    f"Rate limit exceeded, retry {retry_count}/{max_retries} "
-                    f"with backoff {backoff:.2f}s"
-                )
+                if e.status == HORIZON_RATE_LIMIT_STATUS:
+                    backoff *= self.RATE_LIMIT_BACKOFF_FACTOR
+                    logger.warning(
+                        f"Rate limit exceeded, retry {retry_count}/{max_retries} "
+                        f"with backoff {backoff:.2f}s"
+                    )
+                else:
+                    backoff *= 1.5
+                    logger.warning(
+                        f"Horizon API error, retry {retry_count}/{max_retries}: {e}"
+                    )
                 if retry_count >= max_retries:
                     raise
-                    
-            except (ConnectionError, BadRequestError) as e:
+
+            except ConnectionError as e:
                 retry_count += 1
                 backoff *= 1.5
                 logger.warning(
@@ -474,7 +485,7 @@ class AccountOperationIngestor:
                 )
                 if retry_count >= max_retries:
                     raise
-                    
+
             except Exception as e:
                 logger.error(f"Fatal error fetching operations: {e}")
                 raise
@@ -514,9 +525,7 @@ class AccountOperationIngestor:
             )
             
             # Begin batch
-            safe_ledger = self.cursor_store.begin_batch(
-                stream_id, stats.start_ledger
-            )
+            self.cursor_store.begin_batch(stream_id, stats.start_ledger)
             
             # Fetch and process operations
             operations_processed = 0
@@ -664,9 +673,7 @@ class AccountOperationIngestor:
             )
             
             # Begin batch
-            safe_ledger = self.cursor_store.begin_batch(
-                stream_id, start_ledger
-            )
+            self.cursor_store.begin_batch(stream_id, start_ledger)
             
             # Backfill by fetching operations in reverse chronological order
             # (newest first, then work backwards)
@@ -828,9 +835,9 @@ class AccountOperationIngestor:
         stream_id = self._get_stream_id(account_id)
         
         try:
-            # Get cursor
-            cursor_row = self.cursor_store.get_or_create(stream_id)
-            
+            # Ensure cursor exists
+            self.cursor_store.get_or_create(stream_id)
+
             # Reset to specified ledger
             self.cursor_store.advance(
                 stream_id=stream_id,

@@ -2,19 +2,56 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  ConflictException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, In, MoreThan } from 'typeorm';
+import { Repository, FindOptionsWhere, In, IsNull, MoreThan } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { ReadModelRebuildJob, RebuildStatus, RebuildDataset } from './entities/read-model-rebuild-job.entity';
+import { isAxiosError } from 'axios';
+import {
+  ReadModelRebuildJob,
+  RebuildStatus,
+  RebuildDataset,
+} from './entities/read-model-rebuild-job.entity';
 import { RebuildRequestDto } from './dto/rebuild-request.dto';
-import { RebuildResponseDto, RebuildStatusResponseDto, RebuildTriggerResponseDto } from './dto/rebuild-response.dto';
+import {
+  RebuildResponseDto,
+  RebuildStatusResponseDto,
+  RebuildTriggerResponseDto,
+} from './dto/rebuild-response.dto';
 import { JobLockService } from '../scheduler/job-lock.service';
 import { JobHistoryService } from '../scheduler/job-history.service';
 import { AdminAuditService } from '../admin-audit/admin-audit.service';
+
+interface RebuildResultResponse {
+  totalItems?: number;
+  processedItems?: number;
+  failedItems?: number;
+}
+
+interface RebuildRequestPayload {
+  dataset: RebuildDataset;
+  force: boolean;
+  contract_id?: string;
+  idempotency_key?: string;
+}
+
+interface ErrorDetails {
+  message: string;
+  stack?: string;
+  code?: string;
+}
+
+function getErrorDetails(error: unknown): ErrorDetails {
+  if (isAxiosError(error)) {
+    return { message: error.message, stack: error.stack, code: error.code };
+  }
+  if (error instanceof Error) {
+    return { message: error.message, stack: error.stack };
+  }
+  return { message: String(error) };
+}
 
 @Injectable()
 export class ReadModelRebuildService {
@@ -82,8 +119,9 @@ export class ReadModelRebuildService {
     await this.jobRepo.save(job);
 
     // Start rebuild asynchronously
-    this.processRebuild(job.id, userId).catch((error) => {
-      this.logger.error(`Rebuild job ${job.id} failed: ${error.message}`, error.stack);
+    this.processRebuild(job.id, userId).catch((error: unknown) => {
+      const { message, stack } = getErrorDetails(error);
+      this.logger.error(`Rebuild job ${job.id} failed: ${message}`, stack);
     });
 
     // Log audit
@@ -121,7 +159,7 @@ export class ReadModelRebuildService {
     if (contractId) {
       where.contractId = contractId;
     } else {
-      where.contractId = null;
+      where.contractId = IsNull();
     }
 
     return this.jobRepo.findOne({
@@ -141,9 +179,9 @@ export class ReadModelRebuildService {
 
     // Use distributed lock to prevent concurrent processing
     const lockKey = `rebuild:${jobId}`;
-    const lock = await this.jobLockService.acquireLock(lockKey, 3600000); // 1 hour max
+    const acquired = await this.jobLockService.tryAcquire(lockKey);
 
-    if (!lock) {
+    if (!acquired) {
       this.logger.warn(`Could not acquire lock for job ${jobId}, skipping`);
       return;
     }
@@ -151,15 +189,22 @@ export class ReadModelRebuildService {
     try {
       await this.executeRebuild(job, userId);
     } finally {
-      await this.jobLockService.releaseLock(lock);
+      await this.jobLockService.release(lockKey);
     }
   }
 
   /**
    * Execute the actual rebuild
    */
-  private async executeRebuild(job: ReadModelRebuildJob, userId: string): Promise<void> {
+  private async executeRebuild(
+    job: ReadModelRebuildJob,
+    userId: string,
+  ): Promise<void> {
     const startTime = Date.now();
+    const historyRun = await this.jobHistoryService.start(
+      `rebuild:${job.dataset}`,
+      userId,
+    );
 
     // Update job status to in_progress
     job.status = RebuildStatus.IN_PROGRESS;
@@ -171,16 +216,10 @@ export class ReadModelRebuildService {
     await this.jobRepo.save(job);
 
     try {
-      // Determine which endpoint to call
-      let endpoint: string;
-      if (job.dataset === RebuildDataset.ALL) {
-        endpoint = this.datasetEndpoints[RebuildDataset.ALL];
-      } else {
-        endpoint = this.datasetEndpoints[job.dataset];
-      }
+      const endpoint = this.datasetEndpoints[job.dataset];
 
       // Build request payload
-      const payload: any = {
+      const payload: RebuildRequestPayload = {
         dataset: job.dataset,
         force: true, // Always force for rebuilds
       };
@@ -194,7 +233,8 @@ export class ReadModelRebuildService {
       }
 
       // Call data-processing service
-      const dataProcessingUrl = process.env.DATA_PROCESSING_URL || 'http://localhost:8001';
+      const dataProcessingUrl =
+        process.env.DATA_PROCESSING_URL || 'http://localhost:8001';
       const url = `${dataProcessingUrl}${endpoint}`;
 
       // Update progress
@@ -208,7 +248,7 @@ export class ReadModelRebuildService {
       this.logger.log(`Calling data-processing: ${url}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(url, payload, {
+        this.httpService.post<RebuildResultResponse>(url, payload, {
           headers: {
             'X-API-Key': process.env.DATA_PROCESSING_API_KEY || '',
             'X-Correlation-ID': `rebuild-${job.id}`,
@@ -228,55 +268,40 @@ export class ReadModelRebuildService {
       job.progressDetails = {
         phase: 'completed',
         result: result,
-        duration_ms: Date.now() - (job.progressDetails as any)?.startTime || 0,
+        duration_ms: Date.now() - startTime,
       };
 
       // Log to job history
-      await this.jobHistoryService.create({
-        jobName: `rebuild:${job.dataset}`,
-        status: 'success',
-        startedAt: job.startedAt!,
-        completedAt: job.completedAt!,
-        details: {
-          jobId: job.id,
-          contractId: job.contractId,
-          totalItems: job.totalItems,
-          processedItems: job.processedItems,
-          failedItems: job.failedItems,
-        },
+      await this.jobHistoryService.complete(historyRun, {
+        jobId: job.id,
+        contractId: job.contractId,
+        totalItems: job.totalItems,
+        processedItems: job.processedItems,
+        failedItems: job.failedItems,
       });
 
       this.logger.log(
         `Rebuild job ${job.id} completed: ${job.processedItems}/${job.totalItems} items processed`,
       );
-
     } catch (error) {
       // Handle failure
+      const { message, stack, code } = getErrorDetails(error);
+
       job.status = RebuildStatus.FAILED;
       job.completedAt = new Date();
-      job.errorMessage = error.message || 'Unknown error';
-      job.errorStack = error.stack || null;
+      job.errorMessage = message;
+      job.errorStack = stack || null;
       job.progressDetails = {
         phase: 'failed',
-        error: error.message,
-        errorCode: error.code,
-        duration_ms: Date.now() - (job.progressDetails as any)?.startTime || 0,
+        error: message,
+        errorCode: code,
+        duration_ms: Date.now() - startTime,
       };
 
       // Log to job history
-      await this.jobHistoryService.create({
-        jobName: `rebuild:${job.dataset}`,
-        status: 'failure',
-        startedAt: job.startedAt!,
-        completedAt: job.completedAt!,
-        details: {
-          jobId: job.id,
-          contractId: job.contractId,
-          error: error.message,
-        },
-      });
+      await this.jobHistoryService.fail(historyRun, error);
 
-      this.logger.error(`Rebuild job ${job.id} failed: ${error.message}`, error.stack);
+      this.logger.error(`Rebuild job ${job.id} failed: ${message}`, stack);
     }
 
     // Save final state
@@ -305,13 +330,18 @@ export class ReadModelRebuildService {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
 
-    const dto = this.mapToResponse(job);
-
-    return {
-      ...dto,
-      isTerminal: [RebuildStatus.COMPLETED, RebuildStatus.FAILED, RebuildStatus.CANCELLED].includes(job.status),
-      statusMessage: this.getStatusMessage(job),
-    };
+    return Object.assign(
+      new RebuildStatusResponseDto(),
+      this.mapToResponse(job),
+      {
+        isTerminal: [
+          RebuildStatus.COMPLETED,
+          RebuildStatus.FAILED,
+          RebuildStatus.CANCELLED,
+        ].includes(job.status),
+        statusMessage: this.getStatusMessage(job),
+      },
+    );
   }
 
   /**
@@ -339,14 +369,22 @@ export class ReadModelRebuildService {
   /**
    * Cancel a pending rebuild job
    */
-  async cancelJob(jobId: string, userId: string): Promise<{ success: boolean; message: string }> {
+  async cancelJob(
+    jobId: string,
+    userId: string,
+  ): Promise<{ success: boolean; message: string }> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
     }
 
-    if (job.status === RebuildStatus.COMPLETED || job.status === RebuildStatus.FAILED) {
-      throw new BadRequestException(`Cannot cancel job with status ${job.status}`);
+    if (
+      job.status === RebuildStatus.COMPLETED ||
+      job.status === RebuildStatus.FAILED
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel job with status ${job.status}`,
+      );
     }
 
     if (job.status === RebuildStatus.IN_PROGRESS) {
@@ -391,7 +429,11 @@ export class ReadModelRebuildService {
     cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
 
     const result = await this.jobRepo.delete({
-      status: In([RebuildStatus.COMPLETED, RebuildStatus.FAILED, RebuildStatus.CANCELLED]),
+      status: In([
+        RebuildStatus.COMPLETED,
+        RebuildStatus.FAILED,
+        RebuildStatus.CANCELLED,
+      ]),
       createdAt: MoreThan(cutoffDate),
     });
 
@@ -403,7 +445,7 @@ export class ReadModelRebuildService {
    * Map job entity to response DTO
    */
   private mapToResponse(job: ReadModelRebuildJob): RebuildResponseDto {
-    return {
+    return Object.assign(new RebuildResponseDto(), {
       id: job.id,
       dataset: job.dataset,
       contractId: job.contractId,
@@ -419,7 +461,7 @@ export class ReadModelRebuildService {
       completedAt: job.completedAt,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-    };
+    });
   }
 
   /**

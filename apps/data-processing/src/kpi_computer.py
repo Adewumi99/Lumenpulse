@@ -13,13 +13,13 @@ Acceptance Criteria:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Set, Tuple
 from enum import Enum
 
-from sqlalchemy import select, func, and_, desc, text
+from sqlalchemy import select, and_, desc, text
 from sqlalchemy.orm import Session
 
 from src.utils.logger import setup_logger
@@ -239,7 +239,7 @@ class KPIComputer:
             return EventOperation.MILESTONE
 
         # Infer from raw_data fields
-        if "amount" in raw_data and "operation" in raw_data:
+        if "operation" in raw_data:
             op = str(raw_data.get("operation", "")).lower()
             if op == "deposit":
                 return EventOperation.DEPOSIT
@@ -270,7 +270,7 @@ class KPIComputer:
                 if isinstance(val, str):
                     try:
                         return Decimal(val) / self.scaling_factor
-                    except:
+                    except InvalidOperation:
                         pass
                 if isinstance(val, Decimal):
                     return val / self.scaling_factor

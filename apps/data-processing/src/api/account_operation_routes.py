@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 from src.utils.logger import setup_logger
 from src.ingestion.account_operation_ingestor import (
     AccountOperationIngestor,
-    ingest_account_operations,
     get_ingestion_status,
 )
 from src.security import verify_admin_token

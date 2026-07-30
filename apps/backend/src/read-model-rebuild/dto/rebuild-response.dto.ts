@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { RebuildStatus, RebuildDataset } from '../entities/read-model-rebuild-job.entity';
+import {
+  RebuildStatus,
+  RebuildDataset,
+} from '../entities/read-model-rebuild-job.entity';
 
 export class RebuildResponseDto {
   @ApiProperty({ description: 'Job ID for tracking' })
@@ -62,7 +65,7 @@ export class RebuildResponseDto {
     if (this.processedItems === 0) return null;
     const avgTimePerItem = elapsed / this.processedItems;
     const remaining = this.totalItems - this.processedItems;
-    return Math.round(avgTimePerItem * remaining / 1000);
+    return Math.round((avgTimePerItem * remaining) / 1000);
   }
 }
 

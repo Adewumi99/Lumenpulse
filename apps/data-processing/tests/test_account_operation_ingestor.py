@@ -3,19 +3,16 @@ Unit tests for AccountOperationIngestor.
 """
 
 import unittest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any
+from unittest.mock import Mock, patch
+from datetime import datetime, timezone
 
 from src.ingestion.account_operation_ingestor import (
     AccountOperationIngestor,
     AccountOperation,
-    OperationType,
     IngestionStats,
     ingest_account_operations,
     get_ingestion_status,
 )
-from src.ingestion.ledger_cursor_store import LedgerCursorStore
 
 
 class TestAccountOperation(unittest.TestCase):
@@ -89,11 +86,21 @@ class TestIngestionStats(unittest.TestCase):
 
 class TestAccountOperationIngestor(unittest.TestCase):
     """Test AccountOperationIngestor class."""
-    
-    @patch("src.ingestion.account_operation_ingestor.StellarDataFetcher")
-    @patch("src.ingestion.account_operation_ingestor.LedgerCursorStore")
-    @patch("src.ingestion.account_operation_ingestor.PostgresService")
-    def test_init(self, mock_db, mock_cursor_store, mock_fetcher):
+
+    def setUp(self):
+        # Every test constructs AccountOperationIngestor() with no args, which
+        # would otherwise try to open a real Postgres connection.
+        self.enterContext(
+            patch("src.ingestion.account_operation_ingestor.PostgresService")
+        )
+        self.enterContext(
+            patch("src.ingestion.account_operation_ingestor.LedgerCursorStore")
+        )
+        self.enterContext(
+            patch("src.ingestion.account_operation_ingestor.StellarDataFetcher")
+        )
+
+    def test_init(self):
         ingestor = AccountOperationIngestor(
             horizon_url="https://horizon-testnet.stellar.org",
             batch_size=100,

@@ -2,8 +2,7 @@
 Tests for KPI Computer module.
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +15,6 @@ from src.kpi_computer import (
     get_current_kpis,
     get_kpi_history,
 )
-from src.db.models import ContractEvent, DailyOnchainKPISnapshot
 
 
 class TestKPIEvent:
@@ -175,12 +173,12 @@ class TestKPIComputer:
         computer = KPIComputer()
         
         # Test direct field
-        contributor = computer._extract_contributor({"contributor": "GABC123456789012345678901234567890123456"})
-        assert contributor == "GABC123456789012345678901234567890123456"
+        contributor = computer._extract_contributor({"contributor": "GABC1234567890123456789012345678901234567890123456789012"})
+        assert contributor == "GABC1234567890123456789012345678901234567890123456789012"
         
         # Test nested
-        contributor = computer._extract_contributor({"data": {"contributor": "GABC123456789012345678901234567890123456"}})
-        assert contributor == "GABC123456789012345678901234567890123456"
+        contributor = computer._extract_contributor({"data": {"contributor": "GABC1234567890123456789012345678901234567890123456789012"}})
+        assert contributor == "GABC1234567890123456789012345678901234567890123456789012"
         
         # Test fallback (short address)
         contributor = computer._extract_contributor({"contributor": "short"})

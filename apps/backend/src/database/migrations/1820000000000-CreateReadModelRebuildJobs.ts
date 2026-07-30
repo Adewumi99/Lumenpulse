@@ -15,7 +15,13 @@ export class CreateReadModelRebuildJobs1820000000000 implements MigrationInterfa
           {
             name: 'dataset',
             type: 'enum',
-            enum: ['kpi_snapshots', 'project_views', 'contract_events', 'daily_metrics', 'all'],
+            enum: [
+              'kpi_snapshots',
+              'project_views',
+              'contract_events',
+              'daily_metrics',
+              'all',
+            ],
             isNullable: false,
           },
           {
@@ -27,7 +33,13 @@ export class CreateReadModelRebuildJobs1820000000000 implements MigrationInterfa
           {
             name: 'status',
             type: 'enum',
-            enum: ['pending', 'in_progress', 'completed', 'failed', 'cancelled'],
+            enum: [
+              'pending',
+              'in_progress',
+              'completed',
+              'failed',
+              'cancelled',
+            ],
             default: "'pending'",
           },
           {
@@ -146,10 +158,22 @@ export class CreateReadModelRebuildJobs1820000000000 implements MigrationInterfa
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropIndex('read_model_rebuild_jobs', 'idx_rebuild_jobs_idempotency_key');
-    await queryRunner.dropIndex('read_model_rebuild_jobs', 'idx_rebuild_jobs_contract_status');
-    await queryRunner.dropIndex('read_model_rebuild_jobs', 'idx_rebuild_jobs_dataset_status');
-    await queryRunner.dropIndex('read_model_rebuild_jobs', 'idx_rebuild_jobs_status_created');
+    await queryRunner.dropIndex(
+      'read_model_rebuild_jobs',
+      'idx_rebuild_jobs_idempotency_key',
+    );
+    await queryRunner.dropIndex(
+      'read_model_rebuild_jobs',
+      'idx_rebuild_jobs_contract_status',
+    );
+    await queryRunner.dropIndex(
+      'read_model_rebuild_jobs',
+      'idx_rebuild_jobs_dataset_status',
+    );
+    await queryRunner.dropIndex(
+      'read_model_rebuild_jobs',
+      'idx_rebuild_jobs_status_created',
+    );
     await queryRunner.dropTable('read_model_rebuild_jobs');
   }
 }
