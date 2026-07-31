@@ -22,6 +22,7 @@ interface WatchlistState {
   savedProjectIds: number[];
   isProjectSaved: (projectId: number) => boolean;
   toggleSavedProject: (projectId: number) => Promise<void>;
+  isSyncing: boolean;
 }
 
 const WatchlistContext = createContext<WatchlistState>({
@@ -37,6 +38,7 @@ const WatchlistContext = createContext<WatchlistState>({
   savedProjectIds: [],
   isProjectSaved: () => false,
   toggleSavedProject: async () => {},
+  isSyncing: false,
 });
 
 export function useWatchlist() {
@@ -47,6 +49,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -65,6 +68,24 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refresh();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+    
+    const handleOnline = () => {
+      refresh();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
   }, [refresh]);
 
   const addItem = useCallback(
@@ -84,6 +105,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       setItems((prev) => [...prev, newItem]);
+      setIsSyncing(true);
 
       try {
         const item = await WatchlistApiService.addItem(payload);
@@ -93,6 +115,8 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         setItems((prev) => prev.filter(i => i.id !== optimisticId));
         setError(err instanceof Error ? err.message : "Failed to add item");
         throw err;
+      } finally {
+        setIsSyncing(false);
       }
     },
     [],
@@ -102,6 +126,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     async (itemId: string): Promise<void> => {
       const prevItems = [...items];
       setItems((prev) => prev.filter((i) => i.id !== itemId));
+      setIsSyncing(true);
 
       try {
         await WatchlistApiService.removeItem(itemId);
@@ -109,6 +134,8 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         setItems(prevItems);
         setError(err instanceof Error ? err.message : "Failed to remove item");
         throw err;
+      } finally {
+        setIsSyncing(false);
       }
     },
     [items],
@@ -143,6 +170,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         setItems((prev) => [...prev, newItem]);
       }
       
+      setIsSyncing(true);
       try {
         const result = await WatchlistApiService.toggleItem(payload);
         // Sync full state in background to ensure correct IDs and totals
@@ -155,6 +183,8 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         setItems(prevItems);
         setError(err instanceof Error ? err.message : "Failed to toggle item");
         throw err;
+      } finally {
+        setIsSyncing(false);
       }
     },
     [items],
@@ -212,6 +242,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         savedProjectIds,
         isProjectSaved,
         toggleSavedProject,
+        isSyncing,
       }}
     >
       {children}

@@ -93,7 +93,8 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
   }, []);
 
   const toggleFavorite = async (crypto: CryptoData) => {
-    if (favorites.includes(crypto.id)) {
+    const isAdding = !favorites.includes(crypto.id);
+    if (!isAdding) {
       setFavorites(favorites.filter((favId) => favId !== crypto.id));
     } else {
       setFavorites([...favorites, crypto.id]);
@@ -109,7 +110,12 @@ export function CryptoTable({ formatNumberAction, showWatchlistToggle = true }: 
           imageUrl: crypto.icon,
         });
       } catch {
-        // Silently fail - local state still works
+        // Rollback local state
+        setFavorites((prev) => 
+          isAdding 
+            ? prev.filter((id) => id !== crypto.id) 
+            : [...prev, crypto.id]
+        );
       }
     }
   };
