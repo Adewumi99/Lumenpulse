@@ -1262,8 +1262,7 @@ fn test_mixed_scopes_contribution_paused_payout_open() {
 
     // Payout: distribute still works.
     let owner = Address::generate(&env);
-    let distributed =
-        client.distribute_matching_funds(&admin, &round_id, &vec![&env, owner]);
+    let distributed = client.distribute_matching_funds(&admin, &round_id, &vec![&env, owner]);
     assert!(distributed > 0);
 
     // Contribution: record is blocked.
@@ -1331,4 +1330,3 @@ fn test_only_admin_can_pause_scope() {
         Err(Ok(MatchingPoolError::Unauthorized))
     );
 }
-

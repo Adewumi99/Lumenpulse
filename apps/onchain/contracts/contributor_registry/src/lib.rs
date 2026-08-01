@@ -173,9 +173,10 @@ impl ContributorRegistryContract {
             .instance()
             .set(&DataKey::NextProposalId, &0u64);
         // All granular pause scopes start unpaused.
-        env.storage()
-            .instance()
-            .set(&DataKey::ScopePaused(ContribPauseScope::Contribution), &false);
+        env.storage().instance().set(
+            &DataKey::ScopePaused(ContribPauseScope::Contribution),
+            &false,
+        );
         env.storage()
             .instance()
             .set(&DataKey::ScopePaused(ContribPauseScope::Governance), &false);
