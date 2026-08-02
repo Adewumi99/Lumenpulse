@@ -903,7 +903,7 @@ impl ContributorRegistryContract {
         find_signer(&config, &caller)?;
         env.storage()
             .instance()
-            .set(&DataKey::ScopePaused(scope.clone()), &true);
+            .set(&DataKey::ScopePaused(scope), &true);
         ScopePauseChangedEvent {
             admin: caller,
             scope: scope as u32,
@@ -926,7 +926,7 @@ impl ContributorRegistryContract {
         find_signer(&config, &caller)?;
         env.storage()
             .instance()
-            .set(&DataKey::ScopePaused(scope.clone()), &false);
+            .set(&DataKey::ScopePaused(scope), &false);
         ScopePauseChangedEvent {
             admin: caller,
             scope: scope as u32,

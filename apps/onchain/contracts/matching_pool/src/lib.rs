@@ -845,7 +845,7 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &admin)?;
         env.storage()
             .instance()
-            .set(&DataKey::ScopePaused(scope.clone()), &true);
+            .set(&DataKey::ScopePaused(scope), &true);
         events::ScopePauseChangedEvent {
             admin,
             scope: scope as u32,
@@ -865,7 +865,7 @@ impl MatchingPoolContract {
         Self::require_admin(&env, &admin)?;
         env.storage()
             .instance()
-            .set(&DataKey::ScopePaused(scope.clone()), &false);
+            .set(&DataKey::ScopePaused(scope), &false);
         events::ScopePauseChangedEvent {
             admin,
             scope: scope as u32,
