@@ -56,6 +56,7 @@ import { SignalsModule } from './signals/signals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AppConfigModule } from './config/config.module';
 import { CrowdfundModule } from './crowdfund/crowdfund.module';
+import { CrowdfundSyncModule } from './crowdfund-sync/crowdfund-sync.module';
 import { ContributorRegistryModule } from './contributor-registry/contributor-registry.module';
 import { AuditModule } from './audit/audit.module';
 import { AuditLogInterceptor } from './audit/interceptors/audit-log.interceptor';
@@ -70,15 +71,22 @@ import { BotAuthModule } from './bot-auth/bot-auth.module';
 import { DemoBootstrapModule } from './demo-bootstrap/demo-bootstrap.module';
 import { ContributorFeedModule } from './contributor-feed/contributor-feed.module';
 import { ReadModelRebuildModule } from './read-model-rebuild';
+import { SuspiciousContributionModule } from './suspicious-contribution/suspicious-contribution.module';
+import { SnapshotModule } from './snapshot/snapshot.module';
+import { ReconciliationModule } from './reconciliation/reconciliation.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { PriceAlertModule } from './price-alert/price-alert.module';
 
 @Module({
   imports: [
+    // Global configuration
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
       load: [databaseConfig, stellarConfig],
     }),
 
+    // Database connection
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
@@ -91,8 +99,10 @@ import { ReadModelRebuildModule } from './read-model-rebuild';
       },
     }),
 
+    // Scheduling
     ScheduleModule.forRoot(),
 
+    // Rate limiting
     RateLimitModule,
 
     ThrottlerModule.forRootAsync({
@@ -101,14 +111,20 @@ import { ReadModelRebuildModule } from './read-model-rebuild';
       useFactory: (storageService: RateLimitStorageService) =>
         createThrottlerOptions(getRateLimitSettings(), storageService),
     }),
+
+    // File upload
     MulterModule.register({
       storage: memoryStorage(),
       limits: {
         fileSize: 5 * 1024 * 1024,
       },
     }),
+
+    // Cache modules
     AppCacheModule,
     WarmCacheModule,
+
+    // Core modules
     MetricsModule,
     SentimentModule,
     PortfolioModule,
@@ -135,20 +151,60 @@ import { ReadModelRebuildModule } from './read-model-rebuild';
     ModerationModule,
     SearchModule,
     FeatureFlagsModule,
+
+    // Crowdfund modules
     CrowdfundModule,
+    CrowdfundSyncModule, // New: Crowdfund vault sync with DLQ support
+
+    // Registry modules
     ContributorRegistryModule,
+
+    // Configuration
     AppConfigModule,
+
+    // Audit
     AuditModule,
+
+    // Soroban event processing
     SorobanEventsModule,
+
+    // Treasury and vesting
     TreasuryModule,
     VestingWalletModule,
+
+    // Contracts
     ContractsModule,
     ContractAdminModule,
+
+    // Review metrics
     ReviewMetricsModule,
+
+    // Bot auth
     BotAuthModule,
+
+    // Demo bootstrap
     DemoBootstrapModule,
+
+    // Contributor feed
     ContributorFeedModule,
+
+    // Read model rebuild
     ReadModelRebuildModule,
+
+    // Suspicious contribution detection
+    SuspiciousContributionModule,
+
+    // Snapshot generation
+    SnapshotModule,
+
+    // Reconciliation
+    ReconciliationModule,
+
+    // Transaction handling
+    TransactionModule,
+
+    // Price alerts
+    PriceAlertModule,
   ],
   controllers: [AppController, TestController, TestExceptionController],
   providers: [
@@ -174,6 +230,7 @@ import { ReadModelRebuildModule } from './read-model-rebuild';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Apply request ID and logging middleware to all routes
     consumer.apply(RequestIdMiddleware, LoggerMiddleware).forRoutes('*');
   }
 }
