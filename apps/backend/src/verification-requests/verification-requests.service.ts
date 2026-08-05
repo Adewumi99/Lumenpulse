@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from '../users/entities/user.entity';
@@ -12,14 +16,19 @@ import {
   VerificationRequestStatus,
 } from './entities/verification-request.entity';
 
-const REVIEWER_TRANSITIONS: Record<VerificationRequestStatus, VerificationRequestStatus[]> = {
+const REVIEWER_TRANSITIONS: Record<
+  VerificationRequestStatus,
+  VerificationRequestStatus[]
+> = {
   [VerificationRequestStatus.SUBMITTED]: [VerificationRequestStatus.IN_REVIEW],
   [VerificationRequestStatus.IN_REVIEW]: [
     VerificationRequestStatus.CHANGES_REQUESTED,
     VerificationRequestStatus.APPROVED,
     VerificationRequestStatus.REJECTED,
   ],
-  [VerificationRequestStatus.CHANGES_REQUESTED]: [VerificationRequestStatus.IN_REVIEW],
+  [VerificationRequestStatus.CHANGES_REQUESTED]: [
+    VerificationRequestStatus.IN_REVIEW,
+  ],
   [VerificationRequestStatus.APPROVED]: [],
   [VerificationRequestStatus.REJECTED]: [],
   [VerificationRequestStatus.CANCELLED]: [],
@@ -34,16 +43,31 @@ export class VerificationRequestsService {
 
   async create(requesterId: string, dto: CreateVerificationRequestDto) {
     const existing = await this.requests.find({
-      where: { requesterId, targetType: dto.targetType, targetId: dto.targetId },
+      where: {
+        requesterId,
+        targetType: dto.targetType,
+        targetId: dto.targetId,
+      },
     });
     if (existing.some((request) => this.isOpen(request.status))) {
-      throw new BadRequestException('An open verification request already exists for this target');
+      throw new BadRequestException(
+        'An open verification request already exists for this target',
+      );
     }
-    return this.requests.save(this.requests.create({ ...dto, requesterId, status: VerificationRequestStatus.SUBMITTED }));
+    return this.requests.save(
+      this.requests.create({
+        ...dto,
+        requesterId,
+        status: VerificationRequestStatus.SUBMITTED,
+      }),
+    );
   }
 
   async findMine(requesterId: string) {
-    return this.requests.find({ where: { requesterId }, order: { createdAt: 'DESC' } });
+    return this.requests.find({
+      where: { requesterId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async findAll(query: VerificationRequestQueryDto) {
@@ -72,7 +96,9 @@ export class VerificationRequestsService {
   ) {
     const request = await this.getRequest(id);
     if (!REVIEWER_TRANSITIONS[request.status].includes(dto.status)) {
-      throw new BadRequestException(`Cannot transition verification request from ${request.status} to ${dto.status}`);
+      throw new BadRequestException(
+        `Cannot transition verification request from ${request.status} to ${dto.status}`,
+      );
     }
     request.status = dto.status;
     request.reviewerId = reviewerId;
@@ -86,8 +112,15 @@ export class VerificationRequestsService {
     if (request.requesterId !== requesterId) {
       throw new NotFoundException('Verification request not found');
     }
-    if (![VerificationRequestStatus.SUBMITTED, VerificationRequestStatus.CHANGES_REQUESTED].includes(request.status)) {
-      throw new BadRequestException('Only submitted or changes-requested requests can be cancelled');
+    if (
+      ![
+        VerificationRequestStatus.SUBMITTED,
+        VerificationRequestStatus.CHANGES_REQUESTED,
+      ].includes(request.status)
+    ) {
+      throw new BadRequestException(
+        'Only submitted or changes-requested requests can be cancelled',
+      );
     }
     request.status = VerificationRequestStatus.CANCELLED;
     return this.requests.save(request);

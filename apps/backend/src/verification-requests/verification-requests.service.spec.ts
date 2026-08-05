@@ -5,7 +5,7 @@ import {
   VerificationRequestStatus,
   VerificationRequestTargetType,
 } from './entities/verification-request.entity';
-import { UserRole } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { Repository } from 'typeorm';
 
 type VerificationRequestRepositoryMock = jest.Mocked<{
@@ -19,6 +19,7 @@ describe('VerificationRequestsService', () => {
   const request: VerificationRequest = {
     id: 'request-1',
     requesterId: 'user-1',
+    requester: {} as User,
     targetType: VerificationRequestTargetType.PROJECT,
     targetId: 'project-1',
     status: VerificationRequestStatus.SUBMITTED,
@@ -28,12 +29,16 @@ describe('VerificationRequestsService', () => {
     updatedAt: new Date(),
   };
   const repository: VerificationRequestRepositoryMock = {
-    create: jest.fn((value: Partial<VerificationRequest>) => value as VerificationRequest),
+    create: jest.fn(
+      (value: Partial<VerificationRequest>) => value as VerificationRequest,
+    ),
     save: jest.fn((value: VerificationRequest) => Promise.resolve(value)),
     find: jest.fn(),
     findOne: jest.fn(),
   };
-  const service = new VerificationRequestsService(repository as unknown as Repository<VerificationRequest>);
+  const service = new VerificationRequestsService(
+    repository as unknown as Repository<VerificationRequest>,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -52,15 +57,20 @@ describe('VerificationRequestsService', () => {
   it('prevents duplicate open requests for the same requester and target', async () => {
     repository.find.mockResolvedValue([request]);
 
-    await expect(service.create('user-1', {
-      targetType: VerificationRequestTargetType.PROJECT,
-      targetId: 'project-1',
-      evidence: 'new evidence',
-    })).rejects.toThrow(BadRequestException);
+    await expect(
+      service.create('user-1', {
+        targetType: VerificationRequestTargetType.PROJECT,
+        targetId: 'project-1',
+        evidence: 'new evidence',
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('allows only explicit reviewer lifecycle transitions', async () => {
-    repository.findOne.mockResolvedValue({ ...request, status: VerificationRequestStatus.IN_REVIEW });
+    repository.findOne.mockResolvedValue({
+      ...request,
+      status: VerificationRequestStatus.IN_REVIEW,
+    });
     const approved = await service.transition('request-1', 'reviewer-1', {
       status: VerificationRequestStatus.APPROVED,
       reviewNote: 'Evidence verified',
@@ -69,23 +79,42 @@ describe('VerificationRequestsService', () => {
     expect(approved.status).toBe(VerificationRequestStatus.APPROVED);
     expect(approved.reviewerId).toBe('reviewer-1');
 
-    repository.findOne.mockResolvedValue({ ...request, status: VerificationRequestStatus.APPROVED });
-    await expect(service.transition('request-1', 'reviewer-1', {
-      status: VerificationRequestStatus.IN_REVIEW,
-    })).rejects.toThrow(BadRequestException);
+    repository.findOne.mockResolvedValue({
+      ...request,
+      status: VerificationRequestStatus.APPROVED,
+    });
+    await expect(
+      service.transition('request-1', 'reviewer-1', {
+        status: VerificationRequestStatus.IN_REVIEW,
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('limits individual request visibility to its requester or reviewer roles', async () => {
     repository.findOne.mockResolvedValue(request);
-    await expect(service.findOne('request-1', 'user-2', UserRole.USER)).rejects.toThrow(NotFoundException);
-    await expect(service.findOne('request-1', 'reviewer-1', UserRole.REVIEWER)).resolves.toEqual(request);
+    await expect(
+      service.findOne('request-1', 'user-2', UserRole.USER),
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      service.findOne('request-1', 'reviewer-1', UserRole.REVIEWER),
+    ).resolves.toEqual(request);
   });
 
   it('allows requesters to cancel only cancellable states', async () => {
-    repository.findOne.mockResolvedValue({ ...request, status: VerificationRequestStatus.CHANGES_REQUESTED });
-    await expect(service.cancel('request-1', 'user-1')).resolves.toMatchObject({ status: VerificationRequestStatus.CANCELLED });
+    repository.findOne.mockResolvedValue({
+      ...request,
+      status: VerificationRequestStatus.CHANGES_REQUESTED,
+    });
+    await expect(service.cancel('request-1', 'user-1')).resolves.toMatchObject({
+      status: VerificationRequestStatus.CANCELLED,
+    });
 
-    repository.findOne.mockResolvedValue({ ...request, status: VerificationRequestStatus.APPROVED });
-    await expect(service.cancel('request-1', 'user-1')).rejects.toThrow(BadRequestException);
+    repository.findOne.mockResolvedValue({
+      ...request,
+      status: VerificationRequestStatus.APPROVED,
+    });
+    await expect(service.cancel('request-1', 'user-1')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });

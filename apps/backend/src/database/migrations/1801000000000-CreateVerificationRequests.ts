@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateVerificationRequests1801000000000
-  implements MigrationInterface
-{
+export class CreateVerificationRequests1801000000000 implements MigrationInterface {
   name = 'CreateVerificationRequests1801000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -29,6 +27,8 @@ export class CreateVerificationRequests1801000000000
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "verification_requests"`);
     await queryRunner.query(`DROP TYPE "verification_requests_status_enum"`);
-    await queryRunner.query(`DROP TYPE "verification_requests_targettype_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "verification_requests_targettype_enum"`,
+    );
   }
 }
