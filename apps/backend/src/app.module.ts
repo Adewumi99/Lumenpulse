@@ -72,7 +72,7 @@ import { DemoBootstrapModule } from './demo-bootstrap/demo-bootstrap.module';
 import { ContributorFeedModule } from './contributor-feed/contributor-feed.module';
 import { ReadModelRebuildModule } from './read-model-rebuild';
 import { SuspiciousContributionModule } from './suspicious-contribution/suspicious-contribution.module';
-import { SnapshotModule } from './snapshot/snapshot.module';
+import { SnapshotsModule } from './snapshot/snapshot.module';
 import { ReconciliationModule } from './reconciliation/reconciliation.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { PriceAlertModule } from './price-alert/price-alert.module';
@@ -195,7 +195,7 @@ import { PriceAlertModule } from './price-alert/price-alert.module';
     SuspiciousContributionModule,
 
     // Snapshot generation
-    SnapshotModule,
+    SnapshotsModule,
 
     // Reconciliation
     ReconciliationModule,

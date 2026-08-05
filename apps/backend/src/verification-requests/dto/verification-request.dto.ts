@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import {
   VerificationRequestStatus,
   VerificationRequestTargetType,
@@ -16,7 +23,9 @@ export class CreateVerificationRequestDto {
   @MaxLength(255)
   targetId: string;
 
-  @ApiProperty({ description: 'Links or other evidence supporting the request' })
+  @ApiProperty({
+    description: 'Links or other evidence supporting the request',
+  })
   @IsString()
   @MinLength(1)
   @MaxLength(10000)
@@ -34,7 +43,9 @@ export class UpdateVerificationRequestStatusDto {
   @IsEnum(VerificationRequestStatus)
   status: VerificationRequestStatus;
 
-  @ApiPropertyOptional({ description: 'Reviewer decision or requested changes' })
+  @ApiPropertyOptional({
+    description: 'Reviewer decision or requested changes',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(4000)

@@ -28,7 +28,7 @@ const CROWDFUND_VAULT_EVENT_TYPES = [
   'refund_completed',
 ] as const;
 
-type CrowdfundVaultEventType = typeof CROWDFUND_VAULT_EVENT_TYPES[number];
+type CrowdfundVaultEventType = (typeof CROWDFUND_VAULT_EVENT_TYPES)[number];
 
 /**
  * Interface for crowdfund vault event data extracted from raw payload
@@ -121,8 +121,13 @@ export class SorobanEventsProcessor extends WorkerHost {
       }
 
       // Handle Crowdfund Vault events
-      if (this.isCrowdfundVaultEvent(eventType)) {
-        await this.handleCrowdfundVaultEvent(txHash, eventIndex, contractId, rawPayload);
+      if (this.isCrowdfundVaultEvent(eventType ?? null)) {
+        await this.handleCrowdfundVaultEvent(
+          txHash,
+          eventIndex,
+          contractId ?? null,
+          rawPayload,
+        );
       }
 
       // Mark as processed
@@ -181,7 +186,9 @@ export class SorobanEventsProcessor extends WorkerHost {
     if (!eventType) {
       return false;
     }
-    return CROWDFUND_VAULT_EVENT_TYPES.includes(eventType as CrowdfundVaultEventType);
+    return CROWDFUND_VAULT_EVENT_TYPES.includes(
+      eventType as CrowdfundVaultEventType,
+    );
   }
 
   /**
@@ -235,20 +242,46 @@ export class SorobanEventsProcessor extends WorkerHost {
     // Process based on event type
     switch (eventType) {
       case 'contribution':
-        await this.handleContributionEvent(txHash, eventIndex, eventData, vaultProject);
+        await this.handleContributionEvent(
+          txHash,
+          eventIndex,
+          eventData,
+          vaultProject,
+        );
         break;
       case 'milestone_approved':
-        await this.handleMilestoneApprovedEvent(txHash, eventIndex, eventData, vaultProject);
+        await this.handleMilestoneApprovedEvent(
+          txHash,
+          eventIndex,
+          eventData,
+          vaultProject,
+        );
         break;
       case 'funds_withdrawn':
-        await this.handleFundsWithdrawnEvent(txHash, eventIndex, eventData, vaultProject);
+        await this.handleFundsWithdrawnEvent(
+          txHash,
+          eventIndex,
+          eventData,
+          vaultProject,
+        );
         break;
       case 'vault_created':
-        await this.handleVaultCreatedEvent(txHash, eventIndex, eventData, vaultProject);
+        await this.handleVaultCreatedEvent(
+          txHash,
+          eventIndex,
+          eventData,
+          vaultProject,
+        );
         break;
       case 'refund_initiated':
       case 'refund_completed':
-        await this.handleRefundEvent(txHash, eventIndex, eventType, eventData, vaultProject);
+        await this.handleRefundEvent(
+          txHash,
+          eventIndex,
+          eventType,
+          eventData,
+          vaultProject,
+        );
         break;
       default:
         this.logger.debug(
@@ -272,7 +305,9 @@ export class SorobanEventsProcessor extends WorkerHost {
   /**
    * Extract event data from raw payload
    */
-  private extractCrowdfundEventData(rawPayload: Record<string, unknown>): CrowdfundVaultEventData {
+  private extractCrowdfundEventData(
+    rawPayload: Record<string, unknown>,
+  ): CrowdfundVaultEventData {
     const payload = rawPayload as Record<string, any>;
     const data: CrowdfundVaultEventData = {};
 
@@ -331,7 +366,9 @@ export class SorobanEventsProcessor extends WorkerHost {
   /**
    * Extract event type from raw payload
    */
-  private extractEventTypeFromPayload(rawPayload: Record<string, unknown>): string | null {
+  private extractEventTypeFromPayload(
+    rawPayload: Record<string, unknown>,
+  ): string | null {
     const payload = rawPayload as Record<string, any>;
 
     // Check for event type in various common fields

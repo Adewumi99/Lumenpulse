@@ -14,12 +14,16 @@ export class CrowdfundSyncWorker extends WorkerHost implements OnModuleInit {
     super();
   }
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     this.logger.log('Crowdfund sync worker initialized');
   }
 
-  async process(job: Job<SyncVaultDto>): Promise<{ success: boolean; processed: number }> {
-    this.logger.log(`Processing job ${job.id} for vault ${job.data.vaultAddress}`);
+  async process(
+    job: Job<SyncVaultDto>,
+  ): Promise<{ success: boolean; processed: number }> {
+    this.logger.log(
+      `Processing job ${job.id} for vault ${job.data.vaultAddress}`,
+    );
 
     try {
       const result = await this.syncService.syncVault(job.data);
@@ -33,7 +37,8 @@ export class CrowdfundSyncWorker extends WorkerHost implements OnModuleInit {
         processed: result.eventsProcessed,
       };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.logger.error(`Job ${job.id} failed: ${errorMessage}`);
       throw error;
     }
@@ -41,7 +46,9 @@ export class CrowdfundSyncWorker extends WorkerHost implements OnModuleInit {
 
   @OnWorkerEvent('completed')
   onCompleted(job: Job<SyncVaultDto>): void {
-    this.logger.log(`Job ${job.id} completed for vault ${job.data.vaultAddress}`);
+    this.logger.log(
+      `Job ${job.id} completed for vault ${job.data.vaultAddress}`,
+    );
   }
 
   @OnWorkerEvent('failed')

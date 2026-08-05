@@ -43,9 +43,7 @@ export class CrowdfundSyncController {
    * List vault events
    */
   @Get('events')
-  async listEvents(
-    @Query() query: ListVaultEventsDto,
-  ): Promise<{
+  async listEvents(@Query() query: ListVaultEventsDto): Promise<{
     data: VaultEventResponseDto[];
     page: number;
     limit: number;

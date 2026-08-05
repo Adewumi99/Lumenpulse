@@ -141,10 +141,14 @@ export class CreateCrowdfundVaultTables1830000000000 implements MigrationInterfa
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE "crowdfund_vault_dead_letter"`);
-    await queryRunner.query(`DROP TYPE "crowdfund_vault_dead_letter_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "crowdfund_vault_dead_letter_status_enum"`,
+    );
     await queryRunner.query(`DROP TABLE "crowdfund_vault_events"`);
     await queryRunner.query(`DROP TYPE "crowdfund_vault_events_status_enum"`);
-    await queryRunner.query(`DROP TYPE "crowdfund_vault_events_event_type_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "crowdfund_vault_events_event_type_enum"`,
+    );
     await queryRunner.query(`DROP TABLE "crowdfund_vault_cursors"`);
     await queryRunner.query(`DROP TABLE "crowdfund_vault_projects"`);
   }

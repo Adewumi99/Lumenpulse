@@ -5,8 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, MoreThan, LessThan, In, FindOptionsWhere } from 'typeorm';
-import { randomUUID } from 'crypto';
+import { Repository, DataSource, MoreThan, FindOptionsWhere } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { rpc } from '@stellar/stellar-sdk';
@@ -16,7 +15,10 @@ import {
   CrowdfundVaultEventStatus,
 } from './entities/crowdfund-vault-event.entity';
 import { CrowdfundVaultCursor } from './entities/crowdfund-vault-cursor.entity';
-import { CrowdfundVaultDeadLetter, DeadLetterStatus } from './entities/crowdfund-vault-dead-letter.entity';
+import {
+  CrowdfundVaultDeadLetter,
+  DeadLetterStatus,
+} from './entities/crowdfund-vault-dead-letter.entity';
 import { CrowdfundVaultProject } from './entities/crowdfund-vault-project.entity';
 import {
   SyncVaultDto,
@@ -102,7 +104,9 @@ export class CrowdfundSyncService {
   async syncVault(dto: SyncVaultDto): Promise<SyncVaultResponseDto> {
     const { vaultAddress, fromLedger, toLedger, limit } = dto;
 
-    this.logger.log(`Syncing vault ${vaultAddress} from ledger ${fromLedger ?? 'cursor'}`);
+    this.logger.log(
+      `Syncing vault ${vaultAddress} from ledger ${fromLedger ?? 'cursor'}`,
+    );
 
     try {
       // Validate vault exists
@@ -111,7 +115,9 @@ export class CrowdfundSyncService {
       });
 
       if (!vault) {
-        throw new NotFoundException(`Vault ${vaultAddress} not found in registry`);
+        throw new NotFoundException(
+          `Vault ${vaultAddress} not found in registry`,
+        );
       }
 
       // Get or create cursor
@@ -135,10 +141,12 @@ export class CrowdfundSyncService {
         throw new Error('Failed to fetch latest ledger from RPC');
       }
 
-      const endLedger = toLedger ?? Math.min(
-        startLedger + (limit ?? MAX_LEDGER_RANGE_PER_RUN) - 1,
-        latestLedger,
-      );
+      const endLedger =
+        toLedger ??
+        Math.min(
+          startLedger + (limit ?? MAX_LEDGER_RANGE_PER_RUN) - 1,
+          latestLedger,
+        );
 
       if (startLedger > endLedger) {
         return {
@@ -152,11 +160,15 @@ export class CrowdfundSyncService {
       }
 
       // Fetch events from the blockchain
-      const events = await this.fetchVaultEvents(vaultAddress, startLedger, endLedger);
+      const events = await this.fetchVaultEvents(
+        vaultAddress,
+        startLedger,
+        endLedger,
+      );
 
       // Process events in ledger order
       let processedCount = 0;
-      let eventsFound = events.length;
+      const eventsFound = events.length;
 
       for (const event of events) {
         const processed = await this.processVaultEvent(event, vault);
@@ -187,8 +199,11 @@ export class CrowdfundSyncService {
         status: 'success',
       };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to sync vault ${vaultAddress}: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to sync vault ${vaultAddress}: ${errorMessage}`,
+      );
 
       // Update failure count
       const cursor = await this.cursorRepo.findOne({
@@ -230,7 +245,8 @@ export class CrowdfundSyncService {
             vaultAddress: vault.vaultAddress,
           });
         } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           this.logger.error(
             `Failed to sync vault ${vault.vaultAddress}: ${errorMessage}`,
           );
@@ -292,7 +308,8 @@ export class CrowdfundSyncService {
 
       pageCursor = response.cursor || undefined;
 
-      const lastLedger = response.events[response.events.length - 1]?.ledger ?? 0;
+      const lastLedger =
+        response.events[response.events.length - 1]?.ledger ?? 0;
       if (
         lastLedger >= endLedger ||
         response.events.length < PAGE_LIMIT ||
@@ -326,7 +343,7 @@ export class CrowdfundSyncService {
         ? topicValue.toString('utf8')
         : String(topicValue);
 
-      return Object.values(EVENT_TOPICS).includes(topicStr as string);
+      return (Object.values(EVENT_TOPICS) as string[]).includes(topicStr);
     } catch {
       return false;
     }
@@ -391,7 +408,7 @@ export class CrowdfundSyncService {
         value: event.value.toXDR('base64'),
         inSuccessfulContractCall: event.inSuccessfulContractCall,
       },
-      normalizedData,
+      normalizedData: normalizedData as Record<string, unknown> | undefined,
       status: CrowdfundVaultEventStatus.PENDING,
       processingAttempts: 0,
     });
@@ -428,7 +445,7 @@ export class CrowdfundSyncService {
           processed = await this.handleRefundEvent(event, vault);
           break;
         default:
-          this.logger.warn(`Unhandled event type: ${event.eventType}`);
+          this.logger.warn(`Unhandled event type: ${String(event.eventType)}`);
           processed = false;
       }
 
@@ -442,7 +459,8 @@ export class CrowdfundSyncService {
         return false;
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 
       event.processingAttempts += 1;
@@ -462,6 +480,7 @@ export class CrowdfundSyncService {
   /**
    * Handle contribution event
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async handleContribution(
     event: CrowdfundVaultEvent,
     vault: CrowdfundVaultProject,
@@ -472,7 +491,9 @@ export class CrowdfundSyncService {
     const data = event.normalizedData as NormalizedEventData | undefined;
 
     if (!data?.contributionData) {
-      this.logger.warn(`Contribution event ${event.id} missing normalized data`);
+      this.logger.warn(
+        `Contribution event ${event.id} missing normalized data`,
+      );
       return false;
     }
 
@@ -492,6 +513,7 @@ export class CrowdfundSyncService {
   /**
    * Handle milestone approval event
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async handleMilestoneApproval(
     event: CrowdfundVaultEvent,
     vault: CrowdfundVaultProject,
@@ -499,7 +521,9 @@ export class CrowdfundSyncService {
     const data = event.normalizedData as NormalizedEventData | undefined;
 
     if (!data?.milestoneData) {
-      this.logger.warn(`Milestone approval event ${event.id} missing normalized data`);
+      this.logger.warn(
+        `Milestone approval event ${event.id} missing normalized data`,
+      );
       return false;
     }
 
@@ -518,6 +542,7 @@ export class CrowdfundSyncService {
   /**
    * Handle funds withdrawn event
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async handleFundsWithdrawn(
     event: CrowdfundVaultEvent,
     vault: CrowdfundVaultProject,
@@ -525,7 +550,9 @@ export class CrowdfundSyncService {
     const data = event.normalizedData as NormalizedEventData | undefined;
 
     if (!data?.withdrawalData) {
-      this.logger.warn(`Funds withdrawn event ${event.id} missing normalized data`);
+      this.logger.warn(
+        `Funds withdrawn event ${event.id} missing normalized data`,
+      );
       return false;
     }
 
@@ -544,6 +571,7 @@ export class CrowdfundSyncService {
   /**
    * Handle vault created event
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async handleVaultCreated(
     event: CrowdfundVaultEvent,
     vault: CrowdfundVaultProject,
@@ -561,6 +589,7 @@ export class CrowdfundSyncService {
   /**
    * Handle refund events
    */
+  // eslint-disable-next-line @typescript-eslint/require-await
   private async handleRefundEvent(
     event: CrowdfundVaultEvent,
     vault: CrowdfundVaultProject,
@@ -580,10 +609,16 @@ export class CrowdfundSyncService {
   /**
    * Normalize event data for efficient querying
    */
-  private normalizeEventData(event: rpc.Api.EventResponse): NormalizedEventData | undefined {
+  private normalizeEventData(
+    event: rpc.Api.EventResponse,
+  ): NormalizedEventData | undefined {
     try {
       const topic = event.topic[0]?.sym?.();
-      const topicStr = topic ? (Buffer.isBuffer(topic) ? topic.toString('utf8') : String(topic)) : '';
+      const topicStr = topic
+        ? Buffer.isBuffer(topic)
+          ? topic.toString('utf8')
+          : String(topic)
+        : '';
 
       // This is a simplified normalization - actual implementation would depend on contract event structure
       const normalized: NormalizedEventData = {};
@@ -646,7 +681,9 @@ export class CrowdfundSyncService {
       const first = topics[0];
       const sym = first.sym?.();
       if (sym) {
-        const result = Buffer.isBuffer(sym) ? sym.toString('utf8') : String(sym);
+        const result = Buffer.isBuffer(sym)
+          ? sym.toString('utf8')
+          : String(sym);
         return result;
       }
       const str = first.str?.();
@@ -668,8 +705,11 @@ export class CrowdfundSyncService {
       const latest = await server.getLatestLedger();
       return latest.sequence;
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Failed to fetch latest ledger from RPC: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Failed to fetch latest ledger from RPC: ${errorMessage}`,
+      );
       return null;
     }
   }
@@ -712,7 +752,8 @@ export class CrowdfundSyncService {
     if (hasReorg) {
       this.logger.warn(`Potential reorg detected for vault ${vaultAddress}`);
       // Roll back to the safe ledger
-      const safeLedger = latestEvents[latestEvents.length - 1].ledgerSequence - 1;
+      const safeLedger =
+        latestEvents[latestEvents.length - 1].ledgerSequence - 1;
       const cursor = await this.cursorRepo.findOne({
         where: { vaultAddress },
       });
@@ -790,7 +831,9 @@ export class CrowdfundSyncService {
     });
 
     await this.deadLetterRepo.save(dlqEntry);
-    this.logger.log(`Moved event ${event.transactionHash}:${event.eventIndex} to DLQ`);
+    this.logger.log(
+      `Moved event ${event.transactionHash}:${event.eventIndex} to DLQ`,
+    );
   }
 
   /**
@@ -895,9 +938,15 @@ export class CrowdfundSyncService {
   async getDeadLetterStats(): Promise<DeadLetterStatsResponseDto> {
     const [total, pending, replayed, resolved] = await Promise.all([
       this.deadLetterRepo.count(),
-      this.deadLetterRepo.count({ where: { status: DeadLetterStatus.PENDING } }),
-      this.deadLetterRepo.count({ where: { status: DeadLetterStatus.REPLAYED } }),
-      this.deadLetterRepo.count({ where: { status: DeadLetterStatus.RESOLVED } }),
+      this.deadLetterRepo.count({
+        where: { status: DeadLetterStatus.PENDING },
+      }),
+      this.deadLetterRepo.count({
+        where: { status: DeadLetterStatus.REPLAYED },
+      }),
+      this.deadLetterRepo.count({
+        where: { status: DeadLetterStatus.RESOLVED },
+      }),
     ]);
 
     // Get most common error
@@ -909,7 +958,7 @@ export class CrowdfundSyncService {
       .groupBy('dlq.lastErrorMessage')
       .orderBy('count', 'DESC')
       .limit(1)
-      .getRawOne();
+      .getRawOne<{ error: string; count: string }>();
 
     const mostCommonError = mostCommonErrorResult?.error;
 
@@ -925,7 +974,7 @@ export class CrowdfundSyncService {
       .addSelect('COUNT(*)', 'count')
       .where('dlq.status = :status', { status: DeadLetterStatus.PENDING })
       .groupBy('dlq.vaultAddress')
-      .getRawMany();
+      .getRawMany<{ vaultAddress: string; count: string }>();
 
     const byVaultObj = byVault.reduce<Record<string, number>>((acc, item) => {
       acc[item.vaultAddress] = Number(item.count);
@@ -1040,7 +1089,8 @@ export class CrowdfundSyncService {
         replayCount: dlq.replayCount,
       };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       // Update DLQ with the new error
       dlq.lastErrorMessage = `Replay attempt ${dlq.replayCount} failed: ${errorMessage}`;
@@ -1099,22 +1149,23 @@ export class CrowdfundSyncService {
    * Get sync statistics for a vault
    */
   async getVaultStats(vaultAddress: string): Promise<VaultSyncStatsDto> {
-    const [cursor, totalEvents, pendingEvents, failedEvents] = await Promise.all([
-      this.cursorRepo.findOne({ where: { vaultAddress } }),
-      this.eventRepo.count({ where: { vaultAddress } }),
-      this.eventRepo.count({
-        where: {
-          vaultAddress,
-          status: CrowdfundVaultEventStatus.PENDING,
-        },
-      }),
-      this.eventRepo.count({
-        where: {
-          vaultAddress,
-          status: CrowdfundVaultEventStatus.FAILED,
-        },
-      }),
-    ]);
+    const [cursor, totalEvents, pendingEvents, failedEvents] =
+      await Promise.all([
+        this.cursorRepo.findOne({ where: { vaultAddress } }),
+        this.eventRepo.count({ where: { vaultAddress } }),
+        this.eventRepo.count({
+          where: {
+            vaultAddress,
+            status: CrowdfundVaultEventStatus.PENDING,
+          },
+        }),
+        this.eventRepo.count({
+          where: {
+            vaultAddress,
+            status: CrowdfundVaultEventStatus.FAILED,
+          },
+        }),
+      ]);
 
     if (!cursor) {
       return {
@@ -1147,7 +1198,9 @@ export class CrowdfundSyncService {
   /**
    * Map event entity to response DTO
    */
-  private mapEventToResponse(event: CrowdfundVaultEvent): VaultEventResponseDto {
+  private mapEventToResponse(
+    event: CrowdfundVaultEvent,
+  ): VaultEventResponseDto {
     return {
       id: event.id,
       transactionHash: event.transactionHash,

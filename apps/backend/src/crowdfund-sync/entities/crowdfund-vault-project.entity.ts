@@ -1,4 +1,11 @@
-import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 /**
  * Tracks the relationship between vault addresses and project IDs.
@@ -13,13 +20,28 @@ export class CrowdfundVaultProject {
   @Column({ name: 'project_id', type: 'varchar' })
   projectId!: string;
 
-  @Column({ name: 'contract_address', type: 'varchar', length: 56, nullable: true })
+  @Column({
+    name: 'contract_address',
+    type: 'varchar',
+    length: 56,
+    nullable: true,
+  })
   contractAddress?: string;
 
-  @Column({ name: 'token_address', type: 'varchar', length: 56, nullable: true })
+  @Column({
+    name: 'token_address',
+    type: 'varchar',
+    length: 56,
+    nullable: true,
+  })
   tokenAddress?: string;
 
-  @Column({ name: 'owner_address', type: 'varchar', length: 56, nullable: true })
+  @Column({
+    name: 'owner_address',
+    type: 'varchar',
+    length: 56,
+    nullable: true,
+  })
   ownerAddress?: string;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })

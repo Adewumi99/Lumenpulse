@@ -18,13 +18,23 @@ export class CrowdfundVaultCursor {
   /**
    * The block hash at the last synced ledger (for reorg detection)
    */
-  @Column({ name: 'last_ledger_hash', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'last_ledger_hash',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   lastLedgerHash?: string;
 
   /**
    * The last transaction hash processed for this vault
    */
-  @Column({ name: 'last_processed_tx_hash', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'last_processed_tx_hash',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   lastProcessedTxHash?: string;
 
   /**

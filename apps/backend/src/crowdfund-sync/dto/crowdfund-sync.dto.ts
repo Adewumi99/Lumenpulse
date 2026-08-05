@@ -1,6 +1,16 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsUUID, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsEnum,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { CrowdfundVaultEventType, CrowdfundVaultEventStatus } from '../entities/crowdfund-vault-event.entity';
+import {
+  CrowdfundVaultEventType,
+  CrowdfundVaultEventStatus,
+} from '../entities/crowdfund-vault-event.entity';
 import { DeadLetterStatus } from '../entities/crowdfund-vault-dead-letter.entity';
 
 export class SyncVaultDto {
@@ -100,8 +110,8 @@ export class DeadLetterListDto {
   status?: DeadLetterStatus;
 
   @IsOptional()
-  @IsString()
-  eventType?: string;
+  @IsEnum(CrowdfundVaultEventType)
+  eventType?: CrowdfundVaultEventType;
 
   @IsOptional()
   @IsNumber()
