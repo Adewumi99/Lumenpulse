@@ -2146,11 +2146,7 @@ impl CrowdfundVaultContract {
         }
 
         let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
-        let current_balance: i128 = env
-            .storage()
-            .persistent()
-            .get(&balance_key)
-            .unwrap_or(0);
+        let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
 
         if amount > current_balance {
             return Err(CrowdfundError::MigrationAmountExceedsBalance);
@@ -2317,13 +2313,8 @@ impl CrowdfundVaultContract {
                 .get(&DataKey::Project(project_id))
                 .ok_or(CrowdfundError::ProjectNotFound)?;
 
-            let balance_key =
-                DataKey::ProjectBalance(project_id, project.token_address.clone());
-            let current_balance: i128 = env
-                .storage()
-                .persistent()
-                .get(&balance_key)
-                .unwrap_or(0);
+            let balance_key = DataKey::ProjectBalance(project_id, project.token_address.clone());
+            let current_balance: i128 = env.storage().persistent().get(&balance_key).unwrap_or(0);
 
             if plan.amount > current_balance {
                 return Err(CrowdfundError::MigrationAmountExceedsBalance);
@@ -2331,17 +2322,14 @@ impl CrowdfundVaultContract {
 
             // ── 5. If yield is invested, divest first ────────────────────────
             let invested_key = DataKey::ProjectInvestedBalance(project_id);
-            let current_invested: i128 =
-                env.storage().persistent().get(&invested_key).unwrap_or(0);
+            let current_invested: i128 = env.storage().persistent().get(&invested_key).unwrap_or(0);
             if current_invested > 0 {
                 Self::divest_funds_internal(&env, project_id, current_invested)?;
             }
 
             // ── 6. Move funds ────────────────────────────────────────────────
             let new_balance = current_balance - plan.amount;
-            env.storage()
-                .persistent()
-                .set(&balance_key, &new_balance);
+            env.storage().persistent().set(&balance_key, &new_balance);
             env.storage()
                 .persistent()
                 .extend_ttl(&balance_key, LEDGER_THRESHOLD, LEDGER_BUMP);

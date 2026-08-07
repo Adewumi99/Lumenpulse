@@ -39,10 +39,7 @@ use soroban_sdk::{
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn create_token<'a>(
-    env: &Env,
-    admin: &Address,
-) -> (TokenClient<'a>, StellarAssetClient<'a>) {
+fn create_token<'a>(env: &Env, admin: &Address) -> (TokenClient<'a>, StellarAssetClient<'a>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         TokenClient::new(env, &addr.address()),
@@ -307,7 +304,10 @@ fn test_emi5_vetoed_plan_can_be_superseded() {
     );
 
     let plan = client.get_emergency_migration_plan(&project_id);
-    assert_eq!(plan.amount, 200_000, "EMI-5: re-proposed plan must use new amount");
+    assert_eq!(
+        plan.amount, 200_000,
+        "EMI-5: re-proposed plan must use new amount"
+    );
     assert_eq!(
         plan.status,
         MigrationPlanStatus::Pending,
@@ -457,7 +457,10 @@ fn test_emi10_exact_token_transfer() {
     );
     let transferred = client.execute_emergency_migration(&admin, &project_id);
 
-    assert_eq!(transferred, migrate, "EMI-10: returned amount must equal migrate amount");
+    assert_eq!(
+        transferred, migrate,
+        "EMI-10: returned amount must equal migrate amount"
+    );
     assert_eq!(
         token.balance(&recipient),
         recipient_before + migrate,
@@ -556,12 +559,19 @@ fn test_emi11_partial_migration_contributor_clawback() {
     client.execute_emergency_migration(&admin, &project_id);
 
     let status = client.get_project_status(&project_id);
-    assert_eq!(status, Symbol::new(&env, "CANCELED"), "EMI-11: must be CANCELED");
+    assert_eq!(
+        status,
+        Symbol::new(&env, "CANCELED"),
+        "EMI-11: must be CANCELED"
+    );
 
     // 200k remains — user B can clawback their exact deposit.
     let b_before = token.balance(&user_b);
     let clawed = client.clawback_contribution(&project_id, &user_b);
-    assert_eq!(clawed, 200_000, "EMI-11: user B must clawback their exact deposit");
+    assert_eq!(
+        clawed, 200_000,
+        "EMI-11: user B must clawback their exact deposit"
+    );
     assert_eq!(
         token.balance(&user_b),
         b_before + 200_000,
@@ -724,7 +734,10 @@ fn test_emi17_events_emitted() {
         plan.proposed_by, admin,
         "EMI-17: proposed_by must record the admin address"
     );
-    assert_eq!(plan.amount, migrate, "EMI-17: plan amount must match proposed amount");
+    assert_eq!(
+        plan.amount, migrate,
+        "EMI-17: plan amount must match proposed amount"
+    );
 
     // Verify a ProjectCanceled event was also emitted (project transitioned to CANCELED).
     let status = client.get_project_status(&project_id);
@@ -794,7 +807,10 @@ fn test_emi18_partial_round_migration() {
     );
     let transferred = client.execute_emergency_migration(&admin, &project_id);
 
-    assert_eq!(transferred, migrate, "EMI-18: transferred must equal migrate");
+    assert_eq!(
+        transferred, migrate,
+        "EMI-18: transferred must equal migrate"
+    );
     assert_eq!(
         token.balance(&recipient),
         migrate,
@@ -803,7 +819,11 @@ fn test_emi18_partial_round_migration() {
 
     // Project must be CANCELED.
     let status = client.get_project_status(&project_id);
-    assert_eq!(status, Symbol::new(&env, "CANCELED"), "EMI-18: project must be CANCELED");
+    assert_eq!(
+        status,
+        Symbol::new(&env, "CANCELED"),
+        "EMI-18: project must be CANCELED"
+    );
 
     let residual = total - migrate; // 250_000
     assert_eq!(
@@ -817,12 +837,20 @@ fn test_emi18_partial_round_migration() {
     let a_before = token.balance(&user_a);
     let clawed_a = client.clawback_contribution(&project_id, &user_a);
     assert_eq!(clawed_a, amt_a, "EMI-18: user A gets back their deposit");
-    assert_eq!(token.balance(&user_a), a_before + amt_a, "EMI-18: user A balance correct");
+    assert_eq!(
+        token.balance(&user_a),
+        a_before + amt_a,
+        "EMI-18: user A balance correct"
+    );
 
     let c_before = token.balance(&user_c);
     let clawed_c = client.clawback_contribution(&project_id, &user_c);
     assert_eq!(clawed_c, amt_c, "EMI-18: user C gets back their deposit");
-    assert_eq!(token.balance(&user_c), c_before + amt_c, "EMI-18: user C balance correct");
+    assert_eq!(
+        token.balance(&user_c),
+        c_before + amt_c,
+        "EMI-18: user C balance correct"
+    );
 
     // Funds conservation: migrated + clawbacks == total deposited.
     assert_eq!(
