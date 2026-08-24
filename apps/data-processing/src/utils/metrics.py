@@ -69,6 +69,36 @@ ALERT_EMISSIONS_TOTAL = Counter(
     ["rule_name", "reason"],
 )
 
+DATASET_FRESHNESS_SECONDS = Gauge(
+    "lumenpulse_ingestion_dataset_freshness_seconds",
+    "Current age in seconds of the latest ingested record for each dataset",
+    ["dataset"],
+)
+
+DATASET_COMPLETENESS_RATIO = Gauge(
+    "lumenpulse_ingestion_dataset_completeness_ratio",
+    "Current completeness ratio for each ingested dataset, or -1 when unknown",
+    ["dataset"],
+)
+
+DATASET_FRESHNESS_TARGET_SECONDS = Gauge(
+    "lumenpulse_ingestion_dataset_freshness_target_seconds",
+    "Freshness SLA target in seconds for each ingested dataset",
+    ["dataset"],
+)
+
+DATASET_COMPLETENESS_TARGET_RATIO = Gauge(
+    "lumenpulse_ingestion_dataset_completeness_target_ratio",
+    "Completeness SLA target ratio for each ingested dataset",
+    ["dataset"],
+)
+
+DATASET_SLA_BREACH = Gauge(
+    "lumenpulse_ingestion_dataset_sla_breach",
+    "1 when an ingested dataset is breaching freshness or completeness SLA",
+    ["dataset", "sla_type", "severity"],
+)
+
 
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""
