@@ -99,6 +99,20 @@ DATASET_SLA_BREACH = Gauge(
     ["dataset", "sla_type", "severity"],
 )
 
+# Cache metrics for repeated inference analyses (#1251). Defined here so that
+# every import style of cache_manager reuses the same registered collectors.
+CACHE_OPERATIONS_TOTAL = Counter(
+    "lumenpulse_cache_operations_total",
+    "Total number of cache lookup operations by outcome",
+    ["namespace", "outcome"],
+)
+
+CACHE_HIT_RATE = Gauge(
+    "lumenpulse_cache_hit_rate",
+    "Ratio of cache hits to total cache lookups, per namespace",
+    ["namespace"],
+)
+
 
 def start_metrics_server(port: int = 9090):
     """Start standalone prometheus metrics server (for background workers)"""
