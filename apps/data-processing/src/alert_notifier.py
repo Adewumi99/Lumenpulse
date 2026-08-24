@@ -53,10 +53,42 @@ class AlertNotifier:
         self._send_telegram(payload)
         self._send_webhooks(payload)
 
-    def _send_telegram(self, payload):
-        if not self.telegram_bot_token or not self.telegram_channel_id:
-            return
+    def notify_feature_drift(self, report):
+        """Raise a training-vs-serving feature drift alert (#1239).
 
+        ``report`` is the dict produced by
+        ``FeatureDriftReport.to_dict()``. Reuses the same Telegram + webhook
+        fan-out as anomaly alerts so drift travels the existing alerting path.
+        """
+        payload = {
+            "event": "high_priority_insight",
+            "type": "feature_drift",
+            "feature_set": report.get("feature_set"),
+            "drifted_features": report.get("drifted_features", []),
+            "schema_mismatch": report.get("schema_mismatch", False),
+            "training_schema_version": report.get("training_schema_version"),
+            "serving_schema_version": report.get("serving_schema_version"),
+            "threshold": report.get("threshold"),
+            "results": report.get("results", []),
+            "run_id": report.get("run_id"),
+        }
+
+        drifted = payload["drifted_features"]
+        lines = ["🚨 Feature Drift Detected", f"Feature set: {payload['feature_set']}"]
+        if payload["schema_mismatch"]:
+            lines.append(
+                "Schema mismatch: model trained on "
+                f"v{payload['training_schema_version']} vs serving "
+                f"v{payload['serving_schema_version']}"
+            )
+        if drifted:
+            lines.append(f"Drifted features (PSI ≥ {payload['threshold']}): "
+                         f"{', '.join(drifted)}")
+
+        self._send_telegram_text("\n".join(lines))
+        self._send_webhooks(payload)
+
+    def _send_telegram(self, payload):
         text = (
             "🚨 High-Priority Insight\n"
             f"Metric: {payload['metric_name']}\n"
@@ -72,6 +104,12 @@ class AlertNotifier:
             text += f"\n\nReason: {payload['reason']}"
         if "contributing_signals" in payload:
             text += f"\nSignals: {', '.join(payload['contributing_signals'])}"
+
+        self._send_telegram_text(text)
+
+    def _send_telegram_text(self, text):
+        if not self.telegram_bot_token or not self.telegram_channel_id:
+            return
 
         self.session.post(
             f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage",

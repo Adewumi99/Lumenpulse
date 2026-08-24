@@ -98,6 +98,11 @@ def _comparison_log_path(model_type: str) -> Path:
     return _shadow_dir(model_type) / "comparison_log.jsonl"
 
 
+def _metadata_path(model_type: str, version: str) -> Path:
+    """Sidecar JSON holding non-pickled metadata for a saved model version."""
+    return _model_dir(model_type) / f"{version}.meta.json"
+
+
 def _next_version(model_type: str) -> str:
     """Increment the minor version of the latest saved model."""
     existing = list_versions(model_type)
@@ -116,7 +121,12 @@ def _next_version(model_type: str) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
-def save_model(model_type: str, model_obj: Any, version: Optional[str] = None) -> str:
+def save_model(
+    model_type: str,
+    model_obj: Any,
+    version: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> str:
     """
     Persist a trained model to disk and return the version string.
 
@@ -124,6 +134,11 @@ def save_model(model_type: str, model_obj: Any, version: Optional[str] = None) -
         model_type: e.g. "sentiment" or "price_predictor"
         model_obj:  The object to pickle (sklearn pipeline, VADER lexicon dict, …)
         version:    Explicit version string; auto-incremented if omitted.
+        metadata:   Optional JSON-serialisable dict written to a sidecar
+                    ``<version>.meta.json`` file. Used to record the feature
+                    schema version and training-time feature statistics
+                    alongside each model (#1239) without touching the pickle
+                    format, so older readers keep working.
 
     Returns:
         The version string that was saved (e.g. "v1.2").
@@ -135,8 +150,47 @@ def save_model(model_type: str, model_obj: Any, version: Optional[str] = None) -
     with open(path, "wb") as fh:
         pickle.dump(model_obj, fh, protocol=pickle.HIGHEST_PROTOCOL)
 
+    if metadata is not None:
+        meta = dict(metadata)
+        meta.setdefault("model_type", model_type)
+        meta.setdefault("version", version)
+        meta.setdefault("saved_at", datetime.utcnow().isoformat())
+        meta_path = _metadata_path(model_type, version)
+        with open(meta_path, "w", encoding="utf-8") as fh:
+            json.dump(meta, fh, indent=2, sort_keys=True, default=str)
+        logger.info(
+            f"Model metadata saved: type={model_type} version={version} "
+            f"path={meta_path} keys={sorted(meta)}"
+        )
+
     logger.info(f"Model saved: type={model_type} version={version} path={path}")
     return version
+
+
+def load_metadata(
+    model_type: str, version: str = "current"
+) -> Optional[dict[str, Any]]:
+    """
+    Load the metadata sidecar for a saved model version.
+
+    Returns ``None`` when no metadata was recorded (e.g. a legacy model saved
+    before metadata support, or the sentiment model which records none).
+
+    ``version="current"`` resolves the promoted symlink first so callers can
+    ask for "whatever is live right now".
+    """
+    if version == "current":
+        sym = _symlink_path(model_type)
+        if not sym.exists():
+            return None
+        version = sym.resolve().stem  # filename without .pkl
+
+    meta_path = _metadata_path(model_type, version)
+    if not meta_path.exists():
+        return None
+
+    with open(meta_path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def load_model(model_type: str, version: str = "current") -> Any:
@@ -293,6 +347,7 @@ def get_registry_status() -> dict[str, Any]:
                     "available_versions": list_versions(mtype),
                     "live_in_memory": mtype in _live_models,
                     "shadow": get_shadow_status(mtype),
+                    "current_metadata": load_metadata(mtype, "current"),
                 }
     return status
 
