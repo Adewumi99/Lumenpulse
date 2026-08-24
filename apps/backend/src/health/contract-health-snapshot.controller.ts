@@ -56,9 +56,7 @@ export class ContractHealthSnapshotController {
     status: 404,
     description: 'No snapshots captured yet.',
   })
-  async getLatest(
-    @Query('network') network?: string,
-  ) {
+  async getLatest(@Query('network') network?: string) {
     return this.snapshotService.getLatest(network);
   }
 
@@ -94,7 +92,8 @@ export class ContractHealthSnapshotController {
   @ApiQuery({
     name: 'since',
     required: false,
-    description: 'ISO 8601 timestamp — only return snapshots captured after this time',
+    description:
+      'ISO 8601 timestamp — only return snapshots captured after this time',
     example: '2025-01-01T00:00:00Z',
   })
   @ApiResponse({ status: 200, description: 'Snapshot history returned.' })

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Automated Model Retraining Pipeline (Issue #454)
 
@@ -26,6 +27,8 @@ from src.ml.model_registry import (
     get_registry_status,
 )
 from src.ml.price_predictor import PricePredictor
+from src.ml.feature_schema import current_feature_schema, schema_metadata
+from src.ml.feature_drift_detector import compute_distribution_baseline
 from src.utils.logger import setup_logger
 from src.utils.metrics import JOBS_RUN_TOTAL, MODEL_RETRAINING_TOTAL, MODEL_RETRAINING_DURATION
 
@@ -132,18 +135,39 @@ def _fetch_training_data(db_session=None) -> pd.DataFrame:
     return df
 
 
-def _build_price_predictor(db_session=None) -> Tuple[PricePredictor, Dict[str, Any]]:
+def _build_price_predictor(
+    db_session=None,
+) -> Tuple[PricePredictor, Dict[str, Any], Dict[str, Any]]:
     """
     Retrain the PricePredictor on fresh data.
 
     Returns:
-        (predictor, metrics_dict)
+        (predictor, metrics_dict, model_metadata)
+
+    ``model_metadata`` is the JSON-serialisable sidecar persisted alongside the
+    model: the feature schema version/fingerprint it was trained on plus the
+    per-feature training distribution baseline used later for train-vs-serve
+    drift detection (#1239).
     """
     df = _fetch_training_data(db_session)
     predictor = PricePredictor(model_name="linear_regression")
     metrics = predictor.fit(df, target_column="target")
     logger.info(f"PricePredictor retrained: {metrics}")
-    return predictor, metrics
+
+    # Record the schema version + a per-feature distribution baseline so serving
+    # can detect schema skew and scheduled drift checks have something to
+    # compare the live serving distribution against.
+    schema = current_feature_schema(predictor.feature_set)
+    feature_names = [f for f in schema.feature_names if f in df.columns]
+    baseline = compute_distribution_baseline(df, feature_names)
+    metadata: Dict[str, Any] = {
+        **schema_metadata(predictor.feature_set),
+        "trained_at": datetime.utcnow().isoformat(),
+        "metrics": metrics,
+        "feature_names": feature_names,
+        "feature_baseline": baseline,
+    }
+    return predictor, metrics, metadata
 
 
 # ---------------------------------------------------------------------------
@@ -214,20 +238,27 @@ def run_retraining(
         # ── 2. Price predictor ──────────────────────────────────────────────
         logger.info("Step 2: Retraining price predictor …")
         with MODEL_RETRAINING_DURATION.labels(model_type="price_predictor").time():
-            price_model, price_metrics = _build_price_predictor(db_session)
+            price_model, price_metrics, price_metadata = _build_price_predictor(db_session)
 
         passes_price_gate = force or price_metrics.get("r2", -999) >= _MIN_PRICE_R2
 
         if passes_price_gate:
-            p_version = save_model("price_predictor", price_model)
+            p_version = save_model(
+                "price_predictor", price_model, metadata=price_metadata
+            )
             promote_model("price_predictor", p_version)
             MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="success").inc()
             result["models"]["price_predictor"] = {
                 "version": p_version,
                 "metrics": price_metrics,
                 "promoted": True,
+                "schema_version": price_metadata.get("schema_version"),
+                "schema_fingerprint": price_metadata.get("schema_fingerprint"),
             }
-            logger.info(f"PricePredictor promoted: {p_version}")
+            logger.info(
+                f"PricePredictor promoted: {p_version} "
+                f"(schema v{price_metadata.get('schema_version')})"
+            )
         else:
             MODEL_RETRAINING_TOTAL.labels(model_type="price_predictor", status="failed").inc()
             result["models"]["price_predictor"] = {

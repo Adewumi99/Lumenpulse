@@ -174,7 +174,10 @@
     "of_pool": "of pool",
     "contributors": "contributors",
     "contributed": "contributed",
-    "estimated_allocations": "Estimated Allocations"
+    "estimated_allocations": "Estimated Allocations",
+    "funding_progress": "Funding progress",
+    "milestones": "Milestones",
+    "no_eligible_projects": "No eligible projects have been added to this round yet."
   },
   "news": {
     "title": "News",
@@ -407,6 +410,55 @@
       "rejected": "Verification Rejected",
       "archived": "Archived Identity",
       "unregistered": "Unregistered Identity"
+    }
+  },
+  "wallet": {
+    "connect": {
+      "title": "Connect Wallet",
+      "message": "Connect a Stellar wallet to {{network}}. This will open your wallet app to authorize the connection.",
+      "continue_button": "Open Wallet App",
+      "error_title": "Connection Failed",
+      "error_message": "Could not connect the wallet."
+    },
+    "reconnect": {
+      "title": "Reconnect to {{network}}",
+      "message": "Restore your saved wallet session on the new {{network}} network. Choose how you want to reconnect.",
+      "button": "Reconnect Wallet",
+      "restoring": "Restoring wallet session\u2026"
+    },
+    "network_mismatch": {
+      "title": "Network Changed",
+      "message": "Your saved wallet was for a different network. Reconnect to {{network}} to continue.",
+      "last_network_label": "Last connected on {{network}}"
+    },
+    "restore_failed": {
+      "title": "Wallet Restore Failed",
+      "message": "We couldn't safely restore your saved wallet. The stale session has been cleared.",
+      "button": "Try Again"
+    },
+    "status": {
+      "disconnected": "Disconnected",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting",
+      "connected": "Connected",
+      "network_mismatch": "Reconnect Required",
+      "restore_failed": "Restore Failed",
+      "rejected": "Rejected"
+    },
+    "sign": {
+      "title": "Sign Transaction",
+      "message": "A transaction requires your signature. This will open your wallet app.",
+      "error_failed": "The wallet reported a signing failure.",
+      "error_unknown": "Unexpected wallet response.",
+      "error_timeout": "Wallet did not respond in time. Please try again.",
+      "error_concurrent": "A signing request is already in progress."
+    },
+    "error": {
+      "not_available": "This wallet option is not available right now.",
+      "missing_wallet": "No Stellar wallet app found. Install a compatible wallet and try again.",
+      "unsupported_device": "This device cannot open the wallet app.",
+      "rejected": "Wallet connection was rejected.",
+      "unknown": "Something went wrong with the wallet. Please try again."
     }
   }
 }

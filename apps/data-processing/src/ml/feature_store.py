@@ -3,12 +3,50 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timedelta, timezone
 
+from src.ml.feature_schema import (
+    PRICE_PREDICTOR_FEATURE_SET,
+    FeatureSchema,
+    current_feature_schema,
+)
+
 class FeatureStore:
+    # The feature set this store produces. Its versioned schema lives in
+    # src/ml/feature_schema.py and is stamped onto every frame this store
+    # returns (see ``get_features_for_asset``) so downstream training/serving
+    # can record and compare it (#1239).
+    FEATURE_SET = PRICE_PREDICTOR_FEATURE_SET
+
     def __init__(self, db_session: Session):
         """
         Initialize the FeatureStore with a SQLAlchemy database session.
         """
         self.db = db_session
+
+    @property
+    def schema(self) -> FeatureSchema:
+        """The active versioned schema for the features this store produces."""
+        return current_feature_schema(self.FEATURE_SET)
+
+    @property
+    def schema_version(self) -> str:
+        """Convenience accessor for the current feature schema version."""
+        return self.schema.version
+
+    def _stamp_schema(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Record the producing schema version/fingerprint on the frame.
+
+        Uses ``DataFrame.attrs`` so the tag travels with the frame without
+        changing its columns (existing consumers are unaffected). ``attrs`` is
+        best-effort metadata in pandas, so this never raises.
+        """
+        try:
+            schema = self.schema
+            df.attrs["feature_set"] = schema.feature_set
+            df.attrs["schema_version"] = schema.version
+            df.attrs["schema_fingerprint"] = schema.fingerprint
+        except Exception:
+            pass
+        return df
 
     def _parse_window_to_datetime(self, window: str) -> datetime:
         """Helper to parse window strings like '24h' or '7d' into a past timestamp."""
@@ -73,11 +111,11 @@ class FeatureStore:
 
         # If no actual data exists, return the empty DataFrame (now with the correct headers)
         if features_df.empty:
-            return features_df
+            return self._stamp_schema(features_df)
 
         # Clean up the merged dataset (sort by time, forward fill missing values)
         features_df.sort_values('timestamp', inplace=True)
         features_df.ffill(inplace=True)
         features_df.fillna(0, inplace=True) # Fill remaining NaNs with 0
 
-        return features_df
+        return self._stamp_schema(features_df)
