@@ -8,8 +8,9 @@ Tests cover:
   - API endpoint behaviour
 
 Notes:
-  - Imports from ml.model_registry and ml.shadow_predictor directly to
-    avoid triggering sklearn/PricePredictor deps from ml/__init__.py.
+  - Uses the same ``src.ml.*`` module objects the API server imports, so
+    fixture state (MODEL_REGISTRY_PATH, in-memory registry) is shared with
+    the TestClient endpoints.
 """
 
 import json
@@ -22,14 +23,12 @@ from pathlib import Path
 
 import pytest
 
-# Ensure src is on sys.path and clean up leftover models from prior runs
+# Ensure src is on sys.path so the same module objects the API server
+# uses (src.ml.*) are importable by name.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-_leftover = Path("./models")
-if _leftover.exists():
-    shutil.rmtree(_leftover, ignore_errors=True)
 
-from ml import model_registry as _mr  # noqa: E402
-from ml.model_registry import (  # noqa: E402
+from src.ml import model_registry as _mr  # noqa: E402
+from src.ml.model_registry import (  # noqa: E402
     ComparisonEntry,
     _comparison_log_path,
     clear_comparison_log,
@@ -50,7 +49,7 @@ from ml.model_registry import (  # noqa: E402
     save_model,
     unregister_shadow,
 )
-from ml.shadow_predictor import (  # noqa: E402
+from src.ml.shadow_predictor import (  # noqa: E402
     ShadowPredictor,
     create_shadow_predictor,
 )
@@ -426,13 +425,19 @@ class TestShadowEndpoints:
     """Smoke tests for shadow API endpoint response shape."""
 
     @pytest.fixture
-    def api_client(self, saved_model):
-        """Return a FastAPI TestClient wired to the server app."""
+    def api_client(self, saved_model, monkeypatch):
+        """Return an authenticated FastAPI TestClient wired to the server app."""
         from fastapi.testclient import TestClient
 
+        from src.security import security_config
         from src.api.server import app
 
-        return TestClient(app)
+        # The API security middleware requires a configured API key and a
+        # matching X-API-Key header on every request (except /health etc.).
+        monkeypatch.setattr(security_config, "api_key", "test-key")
+        client = TestClient(app)
+        client.headers.update({"X-API-Key": "test-key"})
+        return client
 
     def test_shadow_register_endpoint(self, api_client):
         resp = api_client.post(
@@ -495,6 +500,16 @@ class TestShadowEndpoints:
         assert data["status"] == "unregistered"
 
     def test_model_rollback_endpoint(self, api_client):
+        # Promote shadow v2.0 to live first, so v1.0 becomes the
+        # previous version and can be rolled back to.
+        api_client.post(
+            "/model/shadow/register",
+            json={"model_type": "test_type", "version": "v2.0"},
+        )
+        api_client.post(
+            "/model/shadow/promote",
+            json={"model_type": "test_type"},
+        )
         resp = api_client.post(
             "/model/rollback",
             json={"model_type": "test_type", "target_version": "v1.0"},
