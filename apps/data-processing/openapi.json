@@ -1,0 +1,241 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sentiment Analysis API",
+    "description": "Exposes sentiment analysis for Node.js backend integration",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/rebuild/kpi-snapshots": {
+      "post": {
+        "summary": "Rebuild Kpi Snapshots",
+        "description": "Rebuild KPI snapshots from raw events.\n\nAdmin-only endpoint for rebuilding KPI data when ingestion logic changes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/all": {
+      "post": {
+        "summary": "Rebuild All",
+        "description": "Rebuild all derived datasets.\n\nAdmin-only endpoint for full rebuild of all datasets.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/project-views": {
+      "post": {
+        "summary": "Rebuild Project Views",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/contract-events": {
+      "post": {
+        "summary": "Rebuild Contract Events",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rebuild/metrics": {
+      "post": {
+        "summary": "Rebuild Metrics",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebuildResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RebuildRequest": {
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "title": "Dataset",
+            "description": "Dataset to rebuild"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id",
+            "description": "Contract ID to scope rebuild"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "description": "Force rebuild even if in progress",
+            "default": false
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key",
+            "description": "Idempotency key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset"
+        ],
+        "title": "RebuildRequest",
+        "description": "Request model for triggering a rebuild."
+      },
+      "RebuildResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status of rebuild"
+          },
+          "totalItems": {
+            "type": "integer",
+            "title": "Totalitems",
+            "description": "Total items processed",
+            "default": 0
+          },
+          "processedItems": {
+            "type": "integer",
+            "title": "Processeditems",
+            "description": "Items successfully processed",
+            "default": 0
+          },
+          "failedItems": {
+            "type": "integer",
+            "title": "Faileditems",
+            "description": "Items that failed",
+            "default": 0
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Additional details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "RebuildResponse",
+        "description": "Response model for rebuild results."
+      }
+    }
+  }
+}
