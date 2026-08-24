@@ -755,3 +755,111 @@ def clear_comparison_log(model_type: str) -> None:
     if path.exists():
         path.unlink()
         logger.info("Comparison log cleared for '%s'", model_type)
+
+# ─── Model Card Integration ─────────────────────────────────────────────
+
+def save_model_with_card(
+    model_type: str,
+    model_obj: Any,
+    card_data: dict,
+    version: Optional[str] = None,
+) -> str:
+    """
+    Save a model and its model card together.
+
+    Args:
+        model_type: e.g. "sentiment" or "price_predictor"
+        model_obj: The model object to save
+        card_data: Dictionary with model card fields
+        version: Optional explicit version
+
+    Returns:
+        The version string that was saved.
+    """
+    from model_card import ModelCard, TrainingDataInfo, HyperparametersInfo, EvaluationMetrics, FeatureSchema
+
+    # Parse card data
+    training = TrainingDataInfo(**card_data.get("training_data", {}))
+    hyper = HyperparametersInfo(**card_data.get("hyperparameters", {}))
+    metrics = EvaluationMetrics(**card_data.get("metrics", {}))
+    feature = FeatureSchema(**card_data.get("feature_schema", {}))
+
+    if version is None:
+        version = _next_version(model_type)
+
+    # Create model card
+    card = ModelCard(
+        version=version,
+        model_type=model_type,
+        created_at=datetime.now(timezone.utc).isoformat(),
+        training_data=training,
+        hyperparameters=hyper,
+        metrics=metrics,
+        feature_schema=feature,
+        source_code_commit=card_data.get("source_code_commit"),
+        training_script=card_data.get("training_script"),
+        created_by=card_data.get("created_by"),
+        custom=card_data.get("custom", {}),
+    )
+
+    # Save the model
+    save_model(model_type, model_obj, version)
+
+    # Save the card
+    card_path = _model_dir(model_type) / f"{version}.card.json"
+    card.save(card_path)
+
+    logger.info(f"Model card saved: type={model_type} version={version}")
+    return version
+
+
+def load_model_card(model_type: str, version: str = "current") -> Optional[dict]:
+    """
+    Load the model card for a specific version.
+
+    Args:
+        model_type: e.g. "sentiment" or "price_predictor"
+        version: Specific version or "current"
+
+    Returns:
+        Model card as dict, or None if not found.
+    """
+    if version == "current":
+        sym = _symlink_path(model_type)
+        if not sym.exists():
+            return None
+        version = sym.resolve().stem
+
+    card_path = _model_dir(model_type) / f"{version}.card.json"
+    if not card_path.exists():
+        return None
+
+    try:
+        with open(card_path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def get_registry_status_with_cards() -> dict:
+    """
+    Get registry status with model cards included for each version.
+
+    Returns:
+        Status dictionary with card information.
+    """
+    status = get_registry_status()
+
+    for model_type, info in status.items():
+        versions = info.get("available_versions", [])
+        cards = []
+        for v in versions:
+            card = load_model_card(model_type, v)
+            cards.append({
+                "version": v,
+                "has_card": card is not None,
+                "card": card if card else None,
+            })
+        info["model_cards"] = cards
+
+    return status
