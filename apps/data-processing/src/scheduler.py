@@ -309,6 +309,31 @@ def _metadata_drift_detector_job() -> None:
         logger.error(f"Metadata drift detector job failed: {exc}", exc_info=True)
 
 
+def _feature_drift_detection_job() -> None:
+    """Scheduled wrapper for FeatureDriftDetector (#1239).
+
+    Compares the current serving feature distribution against the training-time
+    baseline recorded with the live price-predictor model and raises an alert
+    through the existing alerting path when any feature drifts beyond the
+    configured PSI threshold (or the feature schema version/fingerprint no
+    longer matches). Read-only; errors are caught so the scheduler keeps running.
+    """
+    try:
+        from src.ml.feature_drift_detector import FeatureDriftDetector
+
+        detector = FeatureDriftDetector()
+        report = detector.detect()
+        logger.info(
+            "Feature drift detection: status=%s drifted=%s schema_mismatch=%s alerted=%s",
+            report.status,
+            report.drifted_features,
+            report.schema_mismatch,
+            report.alerted,
+        )
+    except Exception as exc:
+        logger.error(f"Feature drift detector job failed: {exc}", exc_info=True)
+
+
 def _kpi_reconciliation_job() -> None:
     """Scheduled wrapper for KPIReconciler (#1054).
 
@@ -464,6 +489,18 @@ class AnalyticsScheduler:
                 trigger=IntervalTrigger(hours=6),
                 id="metadata_drift_detection",
                 name="Metadata Drift Detector (backend vs on-chain)",
+                replace_existing=True,
+            )
+
+            # ── Feature Drift Detection: every 6 hours (#1239) ───────────
+            feature_drift_interval = int(
+                os.getenv("FEATURE_DRIFT_INTERVAL_HOURS", "6")
+            )
+            self.scheduler.add_job(
+                func=_feature_drift_detection_job,
+                trigger=IntervalTrigger(hours=feature_drift_interval),
+                id="feature_drift_detection",
+                name="Training-vs-Serving Feature Drift Detection",
                 replace_existing=True,
             )
 
