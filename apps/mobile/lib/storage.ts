@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import {
+  CONTRIBUTION_DRAFT_STORAGE_KEY,
+  ContributionDraft,
+  parseContributionDraft,
+} from './contribution-drafts';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -311,5 +316,52 @@ export const storage = {
 
   async removeTokens() {
     await this.clearAuthState();
+  },
+
+  /**
+   * Persists the in-progress contribution draft so an interrupted
+   * contribution can be resumed after the app restarts. Only one draft is
+   * kept at a time; saving for another project replaces the previous one.
+   */
+  async storeContributionDraft(draft: ContributionDraft) {
+    try {
+      await AsyncStorage.setItem(CONTRIBUTION_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+      console.error('Error storing contribution draft:', error);
+    }
+  },
+
+  /**
+   * Returns the stored contribution draft, or `null` when there is none.
+   * A corrupted entry is removed instead of being surfaced to the caller
+   * (self-healing, mirroring {@link getWalletMetadata}).
+   */
+  async getContributionDraft(): Promise<ContributionDraft | null> {
+    try {
+      const raw = await AsyncStorage.getItem(CONTRIBUTION_DRAFT_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const draft = parseContributionDraft(JSON.parse(raw));
+      if (!draft) {
+        await AsyncStorage.removeItem(CONTRIBUTION_DRAFT_STORAGE_KEY);
+        return null;
+      }
+
+      return draft;
+    } catch (error) {
+      console.error('Error getting contribution draft:', error);
+      return null;
+    }
+  },
+
+  /** Removes the stored contribution draft. Safe to call repeatedly. */
+  async clearContributionDraft() {
+    try {
+      await AsyncStorage.removeItem(CONTRIBUTION_DRAFT_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing contribution draft:', error);
+    }
   },
 };
