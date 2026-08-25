@@ -303,16 +303,30 @@ def promote_model(
         )
 
     if evaluation_set is not None:
-        candidate = load_model(model_type, version)
-        candidate_score = _score_model(candidate, evaluation_set, metric)
-        candidate_metrics = {metric: candidate_score}
-        current_version = get_current_version(model_type)
+        candidate_metrics = None
         incumbent_metrics = None
-        if current_version and current_version != version:
-            incumbent_score = _score_model(
-                get_live_model(model_type), evaluation_set, metric
+        evaluation_error = None
+        try:
+            candidate = load_model(model_type, version)
+            candidate_score = _score_model(candidate, evaluation_set, metric)
+            candidate_metrics = {metric: candidate_score}
+            current_version = get_current_version(model_type)
+            if current_version and current_version != version:
+                incumbent_score = _score_model(
+                    get_live_model(model_type), evaluation_set, metric
+                )
+                incumbent_metrics = {metric: incumbent_score}
+        except Exception as exc:
+            if not force:
+                raise
+            evaluation_error = str(exc)
+            logger.warning(
+                "Forced promotion continuing after evaluation error: "
+                "type=%s version=%s error=%s",
+                model_type,
+                version,
+                exc,
             )
-            incumbent_metrics = {metric: incumbent_score}
 
         configured_threshold = (
             float(os.getenv("PROMOTION_THRESHOLD", "-inf"))
@@ -345,6 +359,8 @@ def promote_model(
             "candidate_metrics": candidate_metrics,
             "incumbent_metrics": incumbent_metrics,
         }
+        if evaluation_error:
+            event["evaluation_error"] = evaluation_error
         if reasons and not force:
             _record_promotion_event(
                 model_type, {**event, "status": "refused", "reasons": reasons}

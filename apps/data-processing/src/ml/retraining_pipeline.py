@@ -157,7 +157,12 @@ def _build_price_predictor(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     seed: Optional[int] = None
-) -> Tuple[PricePredictor, Dict[str, Any], Dict[str, Any]]:
+) -> Tuple[
+    PricePredictor,
+    Dict[str, Any],
+    Dict[str, Any],
+    Tuple[pd.DataFrame, pd.Series],
+]:
     """
     Retrain the PricePredictor on fresh data.
 
