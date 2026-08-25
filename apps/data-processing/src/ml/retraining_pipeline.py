@@ -13,7 +13,7 @@ Models:
 import os
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -102,30 +102,45 @@ def _build_sentiment_model() -> Tuple[SentimentIntensityAnalyzer, Dict[str, Any]
 # Price predictor retraining
 # ---------------------------------------------------------------------------
 
-def _fetch_training_data(db_session=None) -> pd.DataFrame:
+def _fetch_training_data(
+    db_session=None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    seed: Optional[int] = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Fetch recent feature data for the price predictor.
 
     In production this queries the feature store; falls back to a
     synthetic dataset so the pipeline never hard-fails in CI/dev.
     """
+    if start_time is None:
+        end_time = datetime.now(timezone.utc)
+        start_time = end_time - timedelta(days=30)
+
+    query_bounds = {
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat() if end_time else None
+    }
+
     if db_session is not None:
         try:
             from src.ml.feature_store import FeatureStore
             store = FeatureStore(db_session)
-            df = store.get_features_for_asset("XLM", "30d")
+            df = store.get_features_for_asset("XLM", window=None, start_time=start_time, end_time=end_time)
             if not df.empty and len(df) >= 20:
                 # Create a simple target: next-period sentiment shift
                 df["target"] = df["sentiment_score"].shift(-1)
                 df.dropna(inplace=True)
                 logger.info(f"Fetched {len(df)} rows from feature store for retraining")
-                return df
+                return df, query_bounds
         except Exception as exc:
             logger.warning(f"Feature store unavailable, using synthetic data: {exc}")
 
     # Synthetic fallback — keeps the pipeline runnable without a live DB
     import numpy as np
-    rng = np.random.default_rng(seed=int(datetime.utcnow().timestamp()) % 10_000)
+    synth_seed = seed if seed is not None else int(datetime.utcnow().timestamp()) % 10_000
+    rng = np.random.default_rng(seed=synth_seed)
     n = 200
     df = pd.DataFrame({
         "sentiment_score": rng.uniform(-1, 1, n),
@@ -133,13 +148,16 @@ def _fetch_training_data(db_session=None) -> pd.DataFrame:
         "volatility": rng.uniform(0, 0.5, n),
         "target": rng.uniform(-1, 1, n),
     })
-    logger.info("Using synthetic training data (no live DB session provided)")
-    return df
+    logger.info(f"Using synthetic training data (seed={synth_seed})")
+    return df, query_bounds
 
 
 def _build_price_predictor(
     db_session=None,
-) -> Tuple[PricePredictor, Dict[str, Any], Dict[str, Any], Tuple[pd.DataFrame, pd.Series]]:
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    seed: Optional[int] = None
+) -> Tuple[PricePredictor, Dict[str, Any], Dict[str, Any]]:
     """
     Retrain the PricePredictor on fresh data.
 
@@ -151,12 +169,16 @@ def _build_price_predictor(
     per-feature training distribution baseline used later for train-vs-serve
     drift detection (#1239).
     """
-    df = _fetch_training_data(db_session)
+    df, query_bounds = _fetch_training_data(db_session, start_time, end_time, seed)
     predictor = PricePredictor(model_name="linear_regression")
     training_set, evaluation_set = train_test_split(
         df, test_size=0.2, random_state=42
     )
     metrics = predictor.fit(training_set, target_column="target")
+    
+    # Use seed for model training if provided, otherwise default 42
+    random_state = seed if seed is not None else 42
+    metrics = predictor.fit(df, target_column="target", random_state=random_state)
     logger.info(f"PricePredictor retrained: {metrics}")
 
     # Record the schema version + a per-feature distribution baseline so serving
@@ -165,12 +187,24 @@ def _build_price_predictor(
     schema = current_feature_schema(predictor.feature_set)
     feature_names = [f for f in schema.feature_names if f in df.columns]
     baseline = compute_distribution_baseline(df, feature_names)
+    
+    # Attempt to get library versions (simplified)
+    import sklearn
+    library_versions = {
+        "pandas": pd.__version__,
+        "scikit-learn": sklearn.__version__,
+    }
+
     metadata: Dict[str, Any] = {
         **schema_metadata(predictor.feature_set),
         "trained_at": datetime.utcnow().isoformat(),
         "metrics": metrics,
         "feature_names": feature_names,
         "feature_baseline": baseline,
+        "seed": seed,
+        "data_query_bounds": query_bounds,
+        "row_count": len(df),
+        "library_versions": library_versions,
     }
     return (
         predictor,
@@ -190,6 +224,8 @@ def _build_price_predictor(
 def run_retraining(
     db_session=None,
     force: bool = False,
+    manifest: Optional[Dict[str, Any]] = None,
+    seed: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Full retraining run: train → evaluate → version → promote.
@@ -197,6 +233,8 @@ def run_retraining(
     Args:
         db_session: Optional SQLAlchemy session for the feature store.
         force:      Skip quality gates and always promote.
+        manifest:   Optional manifest from a previous run to reproduce it.
+        seed:       Optional seed for randomness.
 
     Returns:
         A result dict with versions, metrics, and status.
@@ -215,9 +253,25 @@ def run_retraining(
     }
 
     try:
+        # Determine run parameters from manifest or defaults
+        run_seed = seed
+        start_time = None
+        end_time = None
+        
+        if manifest:
+            run_seed = manifest.get("seed", run_seed)
+            bounds = manifest.get("data_query_bounds", {})
+            if "start_time" in bounds and bounds["start_time"]:
+                start_time = datetime.fromisoformat(bounds["start_time"])
+            if "end_time" in bounds and bounds["end_time"]:
+                end_time = datetime.fromisoformat(bounds["end_time"])
+        else:
+            if run_seed is None:
+                run_seed = int(datetime.utcnow().timestamp()) % 10_000
+
         logger.info("=" * 60)
         logger.info("Automated Model Retraining Pipeline — START")
-        logger.info(f"Timestamp: {started_at.isoformat()}")
+        logger.info(f"Timestamp: {started_at.isoformat()}, Seed: {run_seed}")
 
         # ── 1. Sentiment model ──────────────────────────────────────────────
         logger.info("Step 1: Retraining sentiment model …")
@@ -257,6 +311,9 @@ def run_retraining(
                 price_metadata,
                 price_evaluation_set,
             ) = _build_price_predictor(db_session)
+            price_model, price_metrics, price_metadata = _build_price_predictor(
+                db_session, start_time=start_time, end_time=end_time, seed=run_seed
+            )
 
         passes_price_gate = force or price_metrics.get("r2", -999) >= _MIN_PRICE_R2
 
