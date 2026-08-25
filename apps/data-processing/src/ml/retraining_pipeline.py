@@ -176,9 +176,6 @@ def _build_price_predictor(
     )
     metrics = predictor.fit(training_set, target_column="target")
     
-    # Use seed for model training if provided, otherwise default 42
-    random_state = seed if seed is not None else 42
-    metrics = predictor.fit(df, target_column="target", random_state=random_state)
     logger.info(f"PricePredictor retrained: {metrics}")
 
     # Record the schema version + a per-feature distribution baseline so serving
@@ -310,8 +307,7 @@ def run_retraining(
                 price_metrics,
                 price_metadata,
                 price_evaluation_set,
-            ) = _build_price_predictor(db_session)
-            price_model, price_metrics, price_metadata = _build_price_predictor(
+            ) = _build_price_predictor(
                 db_session, start_time=start_time, end_time=end_time, seed=run_seed
             )
 
