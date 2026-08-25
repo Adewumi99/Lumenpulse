@@ -52,6 +52,7 @@ Lumenpulse Mobile is the cross-platform mobile client for the Lumenpulse ecosyst
 ## Validation
 
 - Secure session and wallet metadata validation steps live in [SECURE_STORAGE_VALIDATION.md](./SECURE_STORAGE_VALIDATION.md).
+- Coverage floor: the mobile Jest config enforces a minimum global coverage threshold as a baseline floor to raise over time. The current floor is intentionally set to the achieved level so the build stays green while we expand the test matrix.
 
 ## Architecture
 
