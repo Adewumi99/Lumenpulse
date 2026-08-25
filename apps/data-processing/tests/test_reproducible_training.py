@@ -2,9 +2,10 @@ import pytest
 import pandas as pd
 from datetime import datetime, timezone
 import json
+import numpy as np
 
 from src.ml.retraining_pipeline import run_retraining, _build_price_predictor
-from src.ml.model_registry import _REGISTRY
+from src.ml.model_registry import load_metadata, load_model
 
 def test_reproducible_training():
     # Run once to get a manifest
@@ -18,7 +19,7 @@ def test_reproducible_training():
     assert price_predictor1["promoted"] is True
     
     version1 = price_predictor1["version"]
-    metadata1 = _REGISTRY["price_predictor"][version1]["metadata"]
+    metadata1 = load_metadata("price_predictor", version1)
     
     assert "seed" in metadata1
     assert metadata1["seed"] == 42
@@ -38,7 +39,7 @@ def test_reproducible_training():
     assert price_predictor2 is not None
     
     version2 = price_predictor2["version"]
-    metadata2 = _REGISTRY["price_predictor"][version2]["metadata"]
+    metadata2 = load_metadata("price_predictor", version2)
     
     # Verify the seeds and bounds are identical
     assert metadata1["seed"] == metadata2["seed"]
@@ -50,11 +51,10 @@ def test_reproducible_training():
     assert metadata1["feature_baseline"] == metadata2["feature_baseline"]
     
     # We can also compare model weights directly
-    model1 = _REGISTRY["price_predictor"][version1]["model"]
-    model2 = _REGISTRY["price_predictor"][version2]["model"]
+    model1 = load_model("price_predictor", version1)
+    model2 = load_model("price_predictor", version2)
     
     coef1 = model1.pipeline.named_steps["regressor"].coef_
     coef2 = model2.pipeline.named_steps["regressor"].coef_
     
-    import numpy as np
     np.testing.assert_array_almost_equal(coef1, coef2)
