@@ -6,6 +6,7 @@ mod storage;
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
 use soroban_sdk::token::TokenClient;
 use storage::DataKey;
+use reentrancy_guard::{acquire as acquire_reentrancy, release as release_reentrancy};
 
 const SWAP_FEE_BP: u32 = 30; // 0.3% swap fee in basis points (Uniswap v2 standard)
 
@@ -18,6 +19,16 @@ pub struct LiquidityPoolContract;
 /// - Standard LP token mechanics
 #[contractimpl]
 impl LiquidityPoolContract {
+    fn with_reentrancy_guard<T, F>(env: &Env, f: F) -> Result<T, Symbol>
+    where
+        F: FnOnce() -> Result<T, Symbol>,
+    {
+        acquire_reentrancy(env).map_err(|_| Symbol::new(env, "reentrancy"))?;
+        let result = f();
+        release_reentrancy(env);
+        result
+    }
+
     /// Initialize pool with two tokens
     pub fn initialize(env: Env, admin: Address, token_0: Address, token_1: Address) -> Result<(), Symbol> {
         if env.storage().instance().has(&DataKey::Admin) {
@@ -50,99 +61,101 @@ impl LiquidityPoolContract {
         amount_1: i128,
         min_lp: i128,
     ) -> Result<i128, Symbol> {
-        if amount_0 <= 0 || amount_1 <= 0 {
-            return Err(Symbol::new(&env, "invalid_amount"));
-        }
-
-        let token_0_addr: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Token0)
-            .ok_or_else(|| Symbol::new(&env, "not_initialized"))?;
-
-        let token_1_addr: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Token1)
-            .ok_or_else(|| Symbol::new(&env, "not_initialized"))?;
-
-        // Transfer tokens
-        let token_0 = TokenClient::new(&env, &token_0_addr);
-        let token_1 = TokenClient::new(&env, &token_1_addr);
-
-        token_0.transfer(&env.invoker(), &env.current_contract_address(), &amount_0);
-        token_1.transfer(&env.invoker(), &env.current_contract_address(), &amount_1);
-
-        // Calculate LP tokens
-        let reserve_0: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Reserve0)
-            .unwrap_or(0);
-
-        let reserve_1: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Reserve1)
-            .unwrap_or(0);
-
-        let lp_supply: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::LPSupply)
-            .unwrap_or(0);
-
-        let lp_tokens = if lp_supply == 0 {
-            // First liquidity: geometric mean
-            Self::isqrt((amount_0 as u128) * (amount_1 as u128)) as i128
-        } else {
-            // New LP = min(amount_0 * lp_supply / reserve_0, amount_1 * lp_supply / reserve_1)
-            let lp_0 = (amount_0 * lp_supply) / (reserve_0 + 1);
-            let lp_1 = (amount_1 * lp_supply) / (reserve_1 + 1);
-            if lp_0 < lp_1 {
-                lp_0
-            } else {
-                lp_1
+        Self::with_reentrancy_guard(&env, || {
+            if amount_0 <= 0 || amount_1 <= 0 {
+                return Err(Symbol::new(&env, "invalid_amount"));
             }
-        };
 
-        if lp_tokens < min_lp {
-            return Err(Symbol::new(&env, "slippage_exceeded"));
-        }
+            let token_0_addr: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token0)
+                .ok_or_else(|| Symbol::new(&env, "not_initialized"))?;
 
-        // Update state
-        env.storage()
-            .persistent()
-            .set(&DataKey::Reserve0, &(reserve_0 + amount_0));
-        env.storage()
-            .persistent()
-            .set(&DataKey::Reserve1, &(reserve_1 + amount_1));
-        env.storage()
-            .persistent()
-            .set(&DataKey::LPSupply, &(lp_supply + lp_tokens));
+            let token_1_addr: Address = env
+                .storage()
+                .instance()
+                .get(&DataKey::Token1)
+                .ok_or_else(|| Symbol::new(&env, "not_initialized"))?;
 
-        let user_lp: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserLPBalance(env.invoker()))
-            .unwrap_or(0);
-        env.storage().persistent().set(
-            &DataKey::UserLPBalance(env.invoker()),
-            &(user_lp + lp_tokens),
-        );
+            // Transfer tokens
+            let token_0 = TokenClient::new(&env, &token_0_addr);
+            let token_1 = TokenClient::new(&env, &token_1_addr);
 
-        // Accrue fees to reserves (simulating LP fee sharing)
-        Self::accrue_protocol_fees(&env);
+            token_0.transfer(&env.invoker(), &env.current_contract_address(), &amount_0);
+            token_1.transfer(&env.invoker(), &env.current_contract_address(), &amount_1);
 
-        events::LiquidityAddedEvent {
-            user: env.invoker(),
-            amount_0,
-            amount_1,
-            lp_tokens,
-        }
-        .publish(&env);
+            // Calculate LP tokens
+            let reserve_0: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Reserve0)
+                .unwrap_or(0);
 
-        Ok(lp_tokens)
+            let reserve_1: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Reserve1)
+                .unwrap_or(0);
+
+            let lp_supply: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::LPSupply)
+                .unwrap_or(0);
+
+            let lp_tokens = if lp_supply == 0 {
+                // First liquidity: geometric mean
+                Self::isqrt((amount_0 as u128) * (amount_1 as u128)) as i128
+            } else {
+                // New LP = min(amount_0 * lp_supply / reserve_0, amount_1 * lp_supply / reserve_1)
+                let lp_0 = (amount_0 * lp_supply) / (reserve_0 + 1);
+                let lp_1 = (amount_1 * lp_supply) / (reserve_1 + 1);
+                if lp_0 < lp_1 {
+                    lp_0
+                } else {
+                    lp_1
+                }
+            };
+
+            if lp_tokens < min_lp {
+                return Err(Symbol::new(&env, "slippage_exceeded"));
+            }
+
+            // Update state
+            env.storage()
+                .persistent()
+                .set(&DataKey::Reserve0, &(reserve_0 + amount_0));
+            env.storage()
+                .persistent()
+                .set(&DataKey::Reserve1, &(reserve_1 + amount_1));
+            env.storage()
+                .persistent()
+                .set(&DataKey::LPSupply, &(lp_supply + lp_tokens));
+
+            let user_lp: i128 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::UserLPBalance(env.invoker()))
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &DataKey::UserLPBalance(env.invoker()),
+                &(user_lp + lp_tokens),
+            );
+
+            // Accrue fees to reserves (simulating LP fee sharing)
+            Self::accrue_protocol_fees(&env);
+
+            events::LiquidityAddedEvent {
+                user: env.invoker(),
+                amount_0,
+                amount_1,
+                lp_tokens,
+            }
+            .publish(&env);
+
+            Ok(lp_tokens)
+        })
     }
 
     /// Remove liquidity and burn LP tokens
@@ -273,29 +286,31 @@ impl LiquidityPoolContract {
             return Err(Symbol::new(&env, "slippage_exceeded"));
         }
 
-        // Transfer tokens
-        let token_0 = TokenClient::new(&env, &token_0_addr);
-        let token_1 = TokenClient::new(&env, &token_1_addr);
+        Self::with_reentrancy_guard(&env, || {
+            // Transfer tokens
+            let token_0 = TokenClient::new(&env, &token_0_addr);
+            let token_1 = TokenClient::new(&env, &token_1_addr);
 
-        token_0.transfer(&env.invoker(), &env.current_contract_address(), &amount_in);
-        token_1.transfer(&env.current_contract_address(), &env.invoker(), &amount_out);
+            token_0.transfer(&env.invoker(), &env.current_contract_address(), &amount_in);
+            token_1.transfer(&env.current_contract_address(), &env.invoker(), &amount_out);
 
-        // Update reserves (fee stays in pool as yield to LPs)
-        env.storage()
-            .persistent()
-            .set(&DataKey::Reserve0, &(reserve_0 + amount_in));
-        env.storage()
-            .persistent()
-            .set(&DataKey::Reserve1, &(reserve_1 - amount_out));
+            // Update reserves (fee stays in pool as yield to LPs)
+            env.storage()
+                .persistent()
+                .set(&DataKey::Reserve0, &(reserve_0 + amount_in));
+            env.storage()
+                .persistent()
+                .set(&DataKey::Reserve1, &(reserve_1 - amount_out));
 
-        events::SwapEvent {
-            user: env.invoker(),
-            amount_in,
-            amount_out,
-        }
-        .publish(&env);
+            events::SwapEvent {
+                user: env.invoker(),
+                amount_in,
+                amount_out,
+            }
+            .publish(&env);
 
-        Ok(amount_out)
+            Ok(amount_out)
+        })
     }
 
     /// Integer square root
