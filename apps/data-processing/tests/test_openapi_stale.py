@@ -3,7 +3,7 @@ import os
 import sys
 
 # Add parent directory to path to import from src
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from src.api.server import app
 

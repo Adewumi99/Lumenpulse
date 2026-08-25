@@ -6,7 +6,7 @@ describe('Data-processing OpenAPI Contract', () => {
 
   beforeAll(() => {
     // Artifact location documented for backend contributors: apps/data-processing/openapi.json
-    const schemaPath = resolve(__dirname, '../../../../data-processing/openapi.json');
+    const schemaPath = resolve(__dirname, '../../../data-processing/openapi.json');
     if (existsSync(schemaPath)) {
       const content = readFileSync(schemaPath, 'utf8');
       openapiSchema = JSON.parse(content);
