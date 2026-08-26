@@ -43,11 +43,23 @@ class SecurityConfig:
             if not all(k in entry for k in ("id", "value", "scopes")):
                 raise ValueError("Each API_KEYS entry must contain 'id', 'value', and 'scopes'")
             self.api_keys[entry["value"]] = {"id": entry["id"], "scopes": entry["scopes"]}
-        # Backward compatibility: if no API_KEYS provided, fall back to single API_KEY
+        # Backward compatibility: expose a single api_key attribute for older code/tests
+        # Initialize attribute so monkeypatch.setattr(...) won't raise AttributeError
+        self.api_key: str = ""
+
+        # If API_KEYS JSON produced no entries, fall back to single API_KEY env var
         if not self.api_keys:
             single_key = os.getenv("API_KEY", "")
             if single_key:
+                # keep the unified api_keys mapping for runtime checks...
                 self.api_keys[single_key] = {"id": "default", "scopes": ["default"]}
+                # ...and also expose the legacy attribute for tests and old callers
+                self.api_key = single_key
+        else:
+            # If exactly one API key is configured, expose it on the legacy attribute as well
+            if len(self.api_keys) == 1:
+                # store the first key string (the actual key value)
+                self.api_key = next(iter(self.api_keys))
         self.rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
         self.rate_limit_default = os.getenv("RATE_LIMIT_DEFAULT", "100/minute")
         self.rate_limit_strict = os.getenv("RATE_LIMIT_STRICT", "10/minute")
@@ -96,7 +108,7 @@ class SecurityConfig:
             HTTPException: If API key is missing or invalid
         """
         # Ensure API keys are configured
-        if not self.api_keys:
+        if not self.api_keys and not getattr(self, "api_key", ""):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="API is not configured: no API_KEYS or API_KEY provided.",
@@ -117,6 +129,14 @@ class SecurityConfig:
             if hmac.compare_digest(api_key_header, stored_key):
                 matched = info
                 break
+
+        # Backward-compatibility: some tests/legacy code patch `security_config.api_key` directly.
+        # If no mapping matched, compare against legacy single api_key attribute if present.
+        if not matched:
+            legacy_key = getattr(self, "api_key", "")
+            if legacy_key and hmac.compare_digest(api_key_header, legacy_key):
+                matched = {"id": "default", "scopes": ["default"]}
+
         if not matched:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
