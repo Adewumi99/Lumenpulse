@@ -7,7 +7,9 @@ import { GrantRound, RoundCard, RoundTable } from "./components";
 import { DependencyStatusBanner } from "@/components/DependencyStatusBanner";
 import { useWatchlist } from "@/hooks/use-watchlist";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { clientConfig } from '@/lib/config';
+
+const API_BASE = clientConfig.apiUrl;
 
 const STATUS_OPTIONS = [
   { label: "All", value: "ALL" },
