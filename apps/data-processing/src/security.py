@@ -5,6 +5,8 @@ Includes admin token verification for KPI recompute endpoints.
 
 import os
 import re
+import json
+import hmac
 from typing import Optional, Callable, Dict, Any
 from functools import wraps
 from fastapi import Request, HTTPException, status, Header
@@ -27,7 +29,25 @@ class SecurityConfig:
     """Security configuration manager."""
     
     def __init__(self):
-        self.api_key = os.getenv("API_KEY", "")
+        # Load API keys configuration (JSON list)
+        # Expected format: [{"id": "key1", "value": "abcd", "scopes": ["default"]}, ...]
+        api_keys_json = os.getenv("API_KEYS", "[]")
+        try:
+            api_keys_list = json.loads(api_keys_json)
+        except json.JSONDecodeError:
+            raise ValueError("API_KEYS environment variable must be valid JSON")
+        # Map key value to (id, scopes) for lookup
+        self.api_keys: Dict[str, Dict[str, Any]] = {}
+        for entry in api_keys_list:
+            # Validate entry fields
+            if not all(k in entry for k in ("id", "value", "scopes")):
+                raise ValueError("Each API_KEYS entry must contain 'id', 'value', and 'scopes'")
+            self.api_keys[entry["value"]] = {"id": entry["id"], "scopes": entry["scopes"]}
+        # Backward compatibility: if no API_KEYS provided, fall back to single API_KEY
+        if not self.api_keys:
+            single_key = os.getenv("API_KEY", "")
+            if single_key:
+                self.api_keys[single_key] = {"id": "default", "scopes": ["default"]}
         self.rate_limit_enabled = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
         self.rate_limit_default = os.getenv("RATE_LIMIT_DEFAULT", "100/minute")
         self.rate_limit_strict = os.getenv("RATE_LIMIT_STRICT", "10/minute")
@@ -75,28 +95,40 @@ class SecurityConfig:
         Raises:
             HTTPException: If API key is missing or invalid
         """
-        if not self.api_key:
+        # Ensure API keys are configured
+        if not self.api_keys:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="API is not configured: API_KEY environment variable is missing.",
+                detail="API is not configured: no API_KEYS or API_KEY provided.",
             )
 
         api_key_header = request.headers.get("X-API-Key")
-        
+
         if not api_key_header:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing API key. Please provide X-API-Key header.",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
-        
-        if api_key_header != self.api_key:
+
+        # Constant‑time comparison against stored keys
+        matched = None
+        for stored_key, info in self.api_keys.items():
+            if hmac.compare_digest(api_key_header, stored_key):
+                matched = info
+                break
+        if not matched:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid API key",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
-        
+
+        # Log usage by identifier (never log the raw key)
+        logger.info(f"API key {matched['id']} used for {request.url.path}")
+        # Attach key info to request state for downstream checks
+        request.state.api_key_id = matched['id']
+        request.state.api_key_scopes = matched.get('scopes', [])
         return True
     
     def verify_admin_token(self, authorization: Optional[str] = None) -> bool:
@@ -253,6 +285,14 @@ def require_admin_token(func: Callable) -> Callable:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin access required. Please provide valid admin token.",
                 headers={"WWW-Authenticate": "Bearer"},
+            )
+        # Additionally, ensure the API key used has admin scope
+        if "admin" not in getattr(request.state, "api_key_scopes", []):
+            logger.warning(f"Admin route accessed without admin-scoped API key: {request.url.path}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="API key does not have admin scope.",
+                headers={"WWW-Authenticate": "ApiKey"},
             )
         
         return await func(request, *args, **kwargs)
