@@ -255,7 +255,9 @@ impl UpgradableContract {
         new_admin: Address,
     ) -> Result<(), ContractError> {
         Self::require_admin(&env, &proposer)?;
-        env.storage().instance().set(&DataKey::ProposedAdmin, &new_admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposedAdmin, &new_admin);
         Ok(())
     }
 

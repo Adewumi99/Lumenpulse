@@ -404,6 +404,7 @@ export class SearchService {
   }
 
   async rebuildIndex(): Promise<{ success: boolean; message: string; timestamp: string }> {
+    await Promise.resolve();
     return {
       success: true,
       message: 'Search index rebuild completed successfully',
