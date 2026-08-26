@@ -402,12 +402,16 @@ fn test_reentrancy_guard_deposit_rejects_when_locked() {
     let f = setup();
 
     // Simulate reentrant lock state
-    env::Env::default();
     f.env.as_contract(&f.vault, || {
-        f.env.storage().instance().set(&symbol_short!("REENTRANT"), &true);
+        f.env
+            .storage()
+            .instance()
+            .set(&symbol_short!("REENTRANT"), &true);
     });
 
-    let result = f.client.try_deposit(&100i128, &f.user, &fresh_request_id(&f.env, 99));
+    let result = f
+        .client
+        .try_deposit(&100i128, &f.user, &fresh_request_id(&f.env, 99));
     assert_eq!(result, Err(Ok(YieldVaultError::Reentrancy)));
 }
 
