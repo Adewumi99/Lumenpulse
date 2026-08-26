@@ -22,6 +22,7 @@ module.exports = {
     '^expo-constants$': '<rootDir>/lib/__tests__/mocks/expo-constants.ts',
     '^expo-linking$': '<rootDir>/lib/__tests__/mocks/expo-linking.ts',
     '^expo-local-authentication$': '<rootDir>/lib/__tests__/mocks/expo-local-authentication.ts',
+    '^expo-modules-core$': '<rootDir>/lib/__tests__/mocks/expo-modules-core.ts',
     '^expo-secure-store$': '<rootDir>/lib/__tests__/mocks/expo-secure-store.ts',
     '^react-native$': '<rootDir>/lib/__tests__/mocks/react-native.ts',
   },
