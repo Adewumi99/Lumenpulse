@@ -70,6 +70,7 @@ import { z } from 'zod';
  * - PORTFOLIO_SNAPSHOT_ATTEMPTS
  * - PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS
  * - PORTFOLIO_SNAPSHOT_QUEUE_METRICS
+ * - OUTBOX_MAX_ATTEMPTS
  * - RATE_LIMIT_TRACK_BY_IP
  * - RATE_LIMIT_TRACK_BY_API_KEY
  * - RATE_LIMIT_API_KEY_HEADER
@@ -533,6 +534,9 @@ const envSchema = z
       parseBoolean,
       z.boolean().default(false),
     ),
+
+    // Outbox relay — dispatch attempts before an event is dead-lettered.
+    OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
   })
   .superRefine((values, context) => {
     if (values.NODE_ENV === 'production' && !values.CORS_ORIGIN) {
@@ -979,6 +983,7 @@ const optionalSummary = [
     'PORTFOLIO_SNAPSHOT_QUEUE_METRICS',
     String(parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS),
   ],
+  ['OUTBOX_MAX_ATTEMPTS', String(parsedEnv.OUTBOX_MAX_ATTEMPTS)],
 ] as const;
 
 const wasDefaulted = (key: string): boolean => {
@@ -1144,6 +1149,13 @@ export const config = Object.freeze({
     attempts: parsedEnv.PORTFOLIO_SNAPSHOT_ATTEMPTS,
     retryDelayMs: parsedEnv.PORTFOLIO_SNAPSHOT_RETRY_DELAY_MS,
     queueMetrics: parsedEnv.PORTFOLIO_SNAPSHOT_QUEUE_METRICS,
+  }),
+  outbox: Object.freeze({
+    /**
+     * Dispatch attempts before an outbox event is moved to the dead-letter
+     * queue and stops blocking the relay. Default 5.
+     */
+    maxAttempts: parsedEnv.OUTBOX_MAX_ATTEMPTS,
   }),
   rateLimit: Object.freeze({
     tracker: Object.freeze({
