@@ -110,7 +110,7 @@ export default function StandardList<T>({
 
   // When itemHeight is known, supply getItemLayout for O(1) scroll positioning.
   const getItemLayout = itemHeight
-    ? (_: T[] | null | undefined, index: number) => ({
+    ? (_: ArrayLike<T> | null | undefined, index: number) => ({
         length: itemHeight,
         offset: itemHeight * index,
         index,
@@ -149,11 +149,6 @@ export default function StandardList<T>({
       windowSize={5}
       removeClippedSubviews
       getItemLayout={getItemLayout}
-      // Used by RN's internal scroll-indicator when getItemLayout is absent.
-      // RN does not officially expose estimatedItemSize on FlatList yet, but
-      // the prop is accepted and forwarded to the underlying VirtualizedList.
-      // @ts-expect-error — RN's types lag behind the runtime prop support.
-      estimatedItemSize={estimatedItemSize}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={contentContainerStyle}
     />

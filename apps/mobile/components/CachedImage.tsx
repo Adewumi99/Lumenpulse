@@ -64,21 +64,20 @@ export default function CachedImage({
   }
 
   return (
-    <ExpoImage
-      source={{ uri }}
-      style={{ width, height, borderRadius }}
-      contentFit={contentFit}
-      // expo-image will show a blank background while loading; we tint it.
-      placeholder={{ color: placeholderColor }}
-      // Transition prevents a hard flash when the image resolves.
-      transition={200}
-      // expo-image caches to disk by default; 'force-cache' reuses disk copy
-      // across sessions and avoids re-downloading on navigation.
-      cachePolicy="disk"
-      onLoad={handleLoad}
-      accessible={!!accessibilityLabel}
-      accessibilityLabel={accessibilityLabel}
-    />
+    // The View provides the placeholder colour immediately (no layout shift).
+    // expo-image renders on top and fades in once the disk/network load completes.
+    <View style={{ width, height, borderRadius, backgroundColor: placeholderColor, overflow: 'hidden' }}>
+      <ExpoImage
+        source={{ uri }}
+        style={{ width, height }}
+        contentFit={contentFit}
+        transition={200}
+        cachePolicy="disk"
+        onLoad={handleLoad}
+        accessible={!!accessibilityLabel}
+        accessibilityLabel={accessibilityLabel}
+      />
+    </View>
   );
 }
 
