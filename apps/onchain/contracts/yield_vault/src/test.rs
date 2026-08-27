@@ -406,7 +406,7 @@ fn test_reentrancy_guard_deposit_rejects_when_locked() {
         f.env
             .storage()
             .instance()
-            .set(&symbol_short!("REENTRANT"), &true);
+            .set(&Symbol::new(&f.env, "REENTRANT"), &true);
     });
 
     let result = f
