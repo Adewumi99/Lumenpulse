@@ -18,27 +18,41 @@ export interface CryptoApiData {
   };
 }
 
-// CoinGecko API service (No API key needed)
+export interface MarketApiError {
+  code: string;
+  message: string;
+  upstreamStatus?: number;
+}
+
+export interface CryptoMarketResult {
+  data: CryptoApiData[];
+  cachedAt?: string;
+  stale?: boolean;
+  error?: MarketApiError;
+}
+
 export class CryptoApiService {
-  private static readonly BASE_URL = 'https://api.coingecko.com/api/v3';
-  
-  static async getTopCryptocurrencies(limit: number = 20): Promise<CryptoApiData[]> {
+  private static readonly PROXY_BASE = '/api/market';
+
+  static async getTopCryptocurrencies(limit: number = 20): Promise<CryptoMarketResult> {
     try {
       const response = await fetch(
-        `${this.BASE_URL}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=true&price_change_percentage=1h,24h,7d`,
+        `${this.PROXY_BASE}?limit=${limit}`,
         {
-          headers: {
-            'Accept': 'application/json',
-          },
+          headers: { Accept: 'application/json' },
         }
       );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const body = (await response.json()) as CryptoMarketResult;
+
+      if (!response.ok && !body?.data?.length) {
+        const msg =
+          body?.error?.message ||
+          `Proxy returned HTTP ${response.status}`;
+        throw new Error(msg);
       }
-      
-      const data = await response.json();
-      return data;
+
+      return body;
     } catch (error) {
       console.error('Error fetching cryptocurrency data:', error);
       throw new Error('Failed to fetch cryptocurrency data. Please try again later.');
