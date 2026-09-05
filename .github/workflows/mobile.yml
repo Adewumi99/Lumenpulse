@@ -1,6 +1,4 @@
 name: Mobile CI
-
-name: Mobile CI
 on:
   workflow_dispatch:
   push:
